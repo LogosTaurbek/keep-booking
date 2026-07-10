@@ -82,9 +82,9 @@
 - [x] RestaurantService (create, getById, listActive, getMyRestaurants)
 - [x] CompanyController (POST /companies, GET /companies/my)
 - [x] RestaurantController (GET /restaurants, GET /restaurants/{id}, POST, GET /my)
-- [ ] HallController (CRUD /api/v1/halls)
-- [ ] TableController (CRUD /api/v1/tables, batch-update схемы)
-- [ ] WorkingHoursController (CRUD /api/v1/restaurants/{id}/working-hours)
+- [x] HallController (CRUD /api/v1/halls)
+- [x] TableController (CRUD /api/v1/tables, batch-update схемы)
+- [x] WorkingHoursController (GET + PUT full-replace /api/v1/restaurants/{id}/working-hours)
 - [ ] Эндпоинт доступности: GET /restaurants/{id}/availability?date=&from=&to=&guests=
 - [ ] Загрузка фотографий (S3/MinIO)
 - [ ] Меню (MenuItem entity + CRUD)

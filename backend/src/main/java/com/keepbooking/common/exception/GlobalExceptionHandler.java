@@ -12,6 +12,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,21 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         List<ProblemDetail.FieldViolation> violations = ex.getBindingResult().getFieldErrors().stream()
                 .map(e -> new ProblemDetail.FieldViolation(e.getField(), e.getDefaultMessage()))
+                .toList();
+        ProblemDetail body = ProblemDetail.of(ErrorCode.VALIDATION_ERROR,
+                ErrorCode.VALIDATION_ERROR.getDefaultMessage(), request.getRequestURI());
+        body.setErrors(violations);
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ProblemDetail> handleHandlerMethodValidation(HandlerMethodValidationException ex,
+                                                                        HttpServletRequest request) {
+        List<ProblemDetail.FieldViolation> violations = ex.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream()
+                        .map(error -> new ProblemDetail.FieldViolation(
+                                error instanceof FieldError fe ? fe.getField() : result.getMethodParameter().getParameterName(),
+                                error.getDefaultMessage())))
                 .toList();
         ProblemDetail body = ProblemDetail.of(ErrorCode.VALIDATION_ERROR,
                 ErrorCode.VALIDATION_ERROR.getDefaultMessage(), request.getRequestURI());
