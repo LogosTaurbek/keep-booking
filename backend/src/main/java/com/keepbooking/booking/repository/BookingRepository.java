@@ -33,4 +33,17 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
                                      @Param("date") LocalDate date,
                                      @Param("timeFrom") LocalTime timeFrom,
                                      @Param("timeTo") LocalTime timeTo);
+
+    @Query("""
+            SELECT b.table.id FROM Booking b
+            WHERE b.restaurant.id = :restaurantId
+              AND b.bookingDate = :date
+              AND b.status IN ('PENDING', 'CONFIRMED')
+              AND b.timeFrom < :timeTo
+              AND b.timeTo > :timeFrom
+            """)
+    List<Long> findBookedTableIds(@Param("restaurantId") Long restaurantId,
+                                  @Param("date") LocalDate date,
+                                  @Param("timeFrom") LocalTime timeFrom,
+                                  @Param("timeTo") LocalTime timeTo);
 }
