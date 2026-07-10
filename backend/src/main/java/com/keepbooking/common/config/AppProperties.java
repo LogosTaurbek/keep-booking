@@ -12,6 +12,7 @@ public class AppProperties {
 
     private Jwt jwt = new Jwt();
     private Cors cors = new Cors();
+    private Tokens tokens = new Tokens();
 
     @Data
     public static class Jwt {
@@ -23,5 +24,11 @@ public class AppProperties {
     @Data
     public static class Cors {
         private List<String> allowedOrigins = List.of("*");
+    }
+
+    @Data
+    public static class Tokens {
+        private long emailVerificationExpirationMs;
+        private long passwordResetExpirationMs;
     }
 }

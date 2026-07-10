@@ -19,6 +19,7 @@
   2. `exclusion constraint` (btree_gist + tsrange) в миграции V004
 - State machine броней — `BookingStatus.canTransitionTo()` описывает разрешённые переходы
 - Владение ресурсом — `company.owner.id == userId` проверяется в сервисном слое (не только роль)
+- Email/password-reset токены — единая таблица `user_tokens` (purpose VARCHAR+CHECK, хеш SHA-256, как refresh-токены). Реальная отправка email не подключена — токен логируется в консоль (`AuthService.issueToken`)
 
 ---
 
@@ -53,9 +54,9 @@
 - [x] RefreshToken entity + repository
 - [x] AuthService (register, login, refresh, logout)
 - [x] AuthController (POST /api/v1/auth/*)
-- [ ] Подтверждение email (токен + эндпоинт /verify-email)
-- [ ] Восстановление пароля (forgot-password / reset-password)
-- [ ] Смена пароля (/change-password)
+- [x] Подтверждение email (токен + эндпоинт /verify-email; письмо не отправляется — токен логируется, пока нет email-провайдера)
+- [x] Восстановление пароля (forgot-password / reset-password)
+- [x] Смена пароля (/change-password)
 
 #### Модуль user
 - [x] User entity (implements UserDetails)
