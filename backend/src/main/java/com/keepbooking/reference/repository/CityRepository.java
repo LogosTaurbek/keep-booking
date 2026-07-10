@@ -1,0 +1,14 @@
+package com.keepbooking.reference.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.keepbooking.reference.model.City;
+
+public interface CityRepository extends JpaRepository<City, Long> {
+
+    List<City> findByCountryIdOrderByNameAsc(Long countryId);
+
+    List<City> findAllByOrderByNameAsc();
+}

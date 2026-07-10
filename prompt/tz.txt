@@ -1,0 +1,619 @@
+Техническое задание Backend
+1. Общие сведения
+Название проекта
+
+Платформа онлайн-бронирования столиков в кафе и ресторанах.
+
+Backend предоставляет REST API для:
+
+мобильного приложения
+веб-админки
+панели администратора системы
+возможных будущих интеграций
+2. Основные требования
+
+Backend должен обеспечивать
+
+регистрацию пользователей
+авторизацию
+управление заведениями
+управление схемами залов
+управление столиками
+бронирование
+поиск
+историю
+отзывы
+уведомления
+аналитику
+3. Технологии
+
+Java 21
+
+Spring Boot 3
+
+Spring Security
+
+Spring Data JPA
+
+Hibernate
+
+PostgreSQL
+
+Redis
+
+Liquibase
+
+JWT
+
+OpenAPI (Swagger)
+
+Docker
+
+Docker Compose
+
+MapStruct
+
+Lombok
+
+JUnit 5
+
+Testcontainers
+
+Gradle
+
+4. Архитектура
+
+Лучше использовать модульный монолит.
+
+backend
+
+auth
+
+user
+
+restaurant
+
+booking
+
+review
+
+notification
+
+history
+
+admin
+
+analytics
+
+common
+
+В будущем любой модуль можно выделить в микросервис.
+
+5. Авторизация
+
+Поддерживается
+
+Регистрация
+
+Авторизация
+
+Обновление Access Token
+
+Выход
+
+Смена пароля
+
+Восстановление пароля
+
+Подтверждение Email
+
+OAuth (Google, Apple) можно оставить на будущее.
+
+6. Роли
+ROLE_USER
+
+ROLE_RESTAURANT_ADMIN
+
+ROLE_COMPANY_ADMIN
+
+ROLE_SUPER_ADMIN
+7. Пользователь
+Данные
+id
+
+firstname
+
+lastname
+
+phone
+
+email
+
+password
+
+country
+
+city
+
+avatar
+
+language
+
+timezone
+
+status
+
+createdAt
+
+updatedAt
+Возможности
+
+Получение профиля
+
+Редактирование
+
+Удаление аккаунта
+
+Изменение города
+
+Избранное
+
+История
+
+8. Страны
+id
+
+name
+
+code
+9. Города
+id
+
+countryId
+
+name
+
+latitude
+
+longitude
+10. Компания
+
+Компания может иметь множество заведений.
+
+id
+
+name
+
+description
+
+logo
+
+website
+
+phone
+
+email
+
+status
+11. Заведение
+id
+
+companyId
+
+name
+
+description
+
+address
+
+cityId
+
+latitude
+
+longitude
+
+workingHours
+
+rating
+
+status
+12. Фотографии
+id
+
+restaurantId
+
+url
+
+sortOrder
+13. Категории кухни
+Italian
+
+Kazakh
+
+Japanese
+
+Chinese
+
+American
+
+Indian
+
+Uzbek
+
+Georgian
+
+Turkish
+
+Лучше хранить как отдельную таблицу.
+
+14. Меню
+id
+
+restaurantId
+
+categoryId
+
+name
+
+description
+
+price
+
+photo
+
+available
+15. Зал
+
+Одно заведение может иметь несколько залов.
+
+id
+
+restaurantId
+
+name
+
+floor
+
+16. Столик
+id
+
+hallId
+
+number
+
+capacity
+
+shape
+
+type
+
+x
+
+y
+
+width
+
+height
+
+isVip
+
+isSofa
+
+nearWindow
+
+hasSocket
+
+status
+17. Схема зала
+
+Лучше хранить координаты.
+
+Hall
+
+Table
+
+x
+
+y
+
+rotation
+
+width
+
+height
+
+Это позволит рисовать карту как в редакторе.
+
+18. Бронирование
+id
+
+restaurantId
+
+tableId
+
+userId
+
+date
+
+timeFrom
+
+timeTo
+
+guestCount
+
+comment
+
+status
+
+Статусы
+
+PENDING
+
+CONFIRMED
+
+REJECTED
+
+CANCELLED
+
+COMPLETED
+
+NO_SHOW
+19. Проверка брони
+
+Перед созданием необходимо проверить
+
+не занят ли стол
+
+не превышено ли количество гостей
+
+работает ли ресторан
+
+не прошла ли дата
+
+20. История
+
+Хранить
+
+посещенные рестораны
+
+поиски
+
+бронирования
+21. Избранное
+User
+
+Restaurant
+22. Отзывы
+id
+
+restaurantId
+
+userId
+
+rating
+
+text
+
+createdAt
+
+Можно разрешить писать отзыв только после завершенного бронирования.
+
+23. Уведомления
+id
+
+userId
+
+title
+
+message
+
+type
+
+read
+
+createdAt
+24. Push
+
+Firebase
+
+Отправка
+
+Подтверждение
+
+Отмена
+
+Напоминание
+
+Освободился стол
+
+25. Поиск
+
+Поиск по
+
+названию
+
+городу
+
+кухне
+
+рейтингу
+
+радиусу
+
+свободным столикам
+
+26. Карта
+
+API
+
+рестораны
+
+координаты
+
+статус
+
+рейтинг
+27. Аналитика
+
+Для ресторана
+
+Количество броней
+
+Количество отмен
+
+Популярные часы
+
+Популярные столики
+
+Количество посетителей
+
+Средняя загрузка
+
+28. Админка
+
+Компания может
+
+Создать ресторан
+
+Удалить ресторан
+
+Редактировать ресторан
+
+Добавить зал
+
+Добавить столик
+
+Редактировать схему
+
+Добавить меню
+
+Добавить фотографии
+
+Управлять бронированиями
+
+29. Суперадмин
+
+Просмотр всех пользователей
+
+Просмотр всех компаний
+
+Блокировка пользователей
+
+Удаление отзывов
+
+Модерация заведений
+
+Статистика системы
+
+30. Безопасность
+
+JWT
+
+BCrypt
+
+Refresh Token
+
+Rate Limiter
+
+CORS
+
+Validation
+
+Audit Log
+
+31. Логирование
+
+Все действия записывать
+
+Авторизация
+
+Создание ресторана
+
+Редактирование
+
+Удаление
+
+Создание брони
+
+Отмена брони
+32. Мониторинг
+
+Spring Boot Actuator
+
+Prometheus
+
+Grafana
+
+Health Check
+
+33. Документация
+
+Swagger/OpenAPI
+
+Полностью документированные REST API
+
+34. Структура API
+/api/v1/auth
+
+/api/v1/users
+
+/api/v1/restaurants
+
+/api/v1/companies
+
+/api/v1/cities
+
+/api/v1/countries
+
+/api/v1/halls
+
+/api/v1/tables
+
+/api/v1/bookings
+
+/api/v1/menu
+
+/api/v1/reviews
+
+/api/v1/favorites
+
+/api/v1/history
+
+/api/v1/notifications
+
+/api/v1/admin
+
+/api/v1/analytics
+Что бы я добавил сверх этого
+
+Я бы не реализовывал все модули сразу. Лучше сделать архитектуру, которая поддерживает их с самого начала, но разрабатывать поэтапно.
+
+Этап 1 (MVP):
+
+Авторизация и роли.
+Страны и города.
+Компании и рестораны.
+Залы и столики.
+Бронирование.
+Личный кабинет.
+Базовая админка.
+Swagger и Docker.
+
+Этап 2:
+
+Избранное.
+Отзывы.
+История.
+Карта.
+Push-уведомления.
+Поиск с фильтрами.
+
+Этап 3:
+
+Аналитика.
+Мониторинг.
+Интеграции с POS-системами.
+Очередь ожидания.
+Программа лояльности.
+
+Такой подход позволит достаточно быстро получить рабочий MVP, а при этом архитектура останется готовой к дальнейшему развитию без серьезных переделок.

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <include file="db/changelog/migrations/V001__init_reference.sql"/>
+    <include file="db/changelog/migrations/V002__init_users.sql"/>
+    <include file="db/changelog/migrations/V003__init_restaurants.sql"/>
+    <include file="db/changelog/migrations/V004__init_bookings.sql"/>
+
+</databaseChangeLog>

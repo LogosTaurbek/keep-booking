@@ -1,0 +1,51 @@
+package com.keepbooking.common.exception;
+
+import org.springframework.http.HttpStatus;
+
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+
+@Getter
+@RequiredArgsConstructor
+public enum ErrorCode {
+
+    // Auth
+    INVALID_CREDENTIALS("AUTH_001", "Invalid email or password", HttpStatus.UNAUTHORIZED),
+    TOKEN_EXPIRED("AUTH_002", "Token has expired", HttpStatus.UNAUTHORIZED),
+    TOKEN_INVALID("AUTH_003", "Token is invalid", HttpStatus.UNAUTHORIZED),
+    EMAIL_NOT_VERIFIED("AUTH_004", "Email is not verified", HttpStatus.FORBIDDEN),
+    EMAIL_ALREADY_EXISTS("AUTH_005", "Email already registered", HttpStatus.CONFLICT),
+
+    // User
+    USER_NOT_FOUND("USER_001", "User not found", HttpStatus.NOT_FOUND),
+    USER_BLOCKED("USER_002", "User is blocked", HttpStatus.FORBIDDEN),
+
+    // Company
+    COMPANY_NOT_FOUND("COMPANY_001", "Company not found", HttpStatus.NOT_FOUND),
+    ACCESS_DENIED("COMPANY_002", "Access denied to this resource", HttpStatus.FORBIDDEN),
+
+    // Restaurant
+    RESTAURANT_NOT_FOUND("REST_001", "Restaurant not found", HttpStatus.NOT_FOUND),
+    RESTAURANT_NOT_ACTIVE("REST_002", "Restaurant is not active", HttpStatus.UNPROCESSABLE_ENTITY),
+
+    // Hall / Table
+    HALL_NOT_FOUND("HALL_001", "Hall not found", HttpStatus.NOT_FOUND),
+    TABLE_NOT_FOUND("TABLE_001", "Table not found", HttpStatus.NOT_FOUND),
+    TABLE_NOT_AVAILABLE("TABLE_002", "Table is not available for the requested time slot", HttpStatus.CONFLICT),
+
+    // Booking
+    BOOKING_NOT_FOUND("BOOK_001", "Booking not found", HttpStatus.NOT_FOUND),
+    BOOKING_INVALID_TIME("BOOK_002", "Booking time is invalid or in the past", HttpStatus.UNPROCESSABLE_ENTITY),
+    BOOKING_GUEST_COUNT("BOOK_003", "Guest count exceeds table capacity", HttpStatus.UNPROCESSABLE_ENTITY),
+    BOOKING_STATUS_TRANSITION("BOOK_004", "Invalid booking status transition", HttpStatus.UNPROCESSABLE_ENTITY),
+    BOOKING_RESTAURANT_CLOSED("BOOK_005", "Restaurant is closed at the requested time", HttpStatus.UNPROCESSABLE_ENTITY),
+
+    // Generic
+    VALIDATION_ERROR("VAL_001", "Validation failed", HttpStatus.BAD_REQUEST),
+    NOT_FOUND("GEN_001", "Resource not found", HttpStatus.NOT_FOUND),
+    INTERNAL_ERROR("GEN_002", "Internal server error", HttpStatus.INTERNAL_SERVER_ERROR);
+
+    private final String code;
+    private final String defaultMessage;
+    private final HttpStatus httpStatus;
+}
