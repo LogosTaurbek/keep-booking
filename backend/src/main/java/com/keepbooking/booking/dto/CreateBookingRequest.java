@@ -3,7 +3,6 @@ package com.keepbooking.booking.dto;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
-import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -34,6 +33,4 @@ public class CreateBookingRequest {
 
     @Size(max = 1000)
     private String comment;
-
-    private String idempotencyKey;
 }

@@ -13,6 +13,7 @@ public class AppProperties {
     private Jwt jwt = new Jwt();
     private Cors cors = new Cors();
     private Tokens tokens = new Tokens();
+    private Booking booking = new Booking();
 
     @Data
     public static class Jwt {
@@ -30,5 +31,10 @@ public class AppProperties {
     public static class Tokens {
         private long emailVerificationExpirationMs;
         private long passwordResetExpirationMs;
+    }
+
+    @Data
+    public static class Booking {
+        private long pendingTimeoutMs;
     }
 }

@@ -52,6 +52,9 @@ app:
   tokens:
     email-verification-expiration-ms: ${EMAIL_VERIFICATION_EXPIRATION_MS:86400000}
     password-reset-expiration-ms: ${PASSWORD_RESET_EXPIRATION_MS:3600000}
+  booking:
+    pending-timeout-ms: ${BOOKING_PENDING_TIMEOUT_MS:1800000}
+    scheduler-interval-ms: ${BOOKING_SCHEDULER_INTERVAL_MS:60000}
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:4200,http://localhost:8081}
 

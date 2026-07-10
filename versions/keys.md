@@ -20,6 +20,10 @@
 - State machine броней — `BookingStatus.canTransitionTo()` описывает разрешённые переходы
 - Владение ресурсом — `company.owner.id == userId` проверяется в сервисном слое (не только роль)
 - Email/password-reset токены — единая таблица `user_tokens` (purpose VARCHAR+CHECK, хеш SHA-256, как refresh-токены). Реальная отправка email не подключена — токен логируется в консоль (`AuthService.issueToken`)
+- Идемпотентность броней — ТРОЙНАЯ гарантия (по аналогии с double-booking):
+  1. Redis-кэш ответа по `Idempotency-Key` (быстрый путь)
+  2. Поиск по `bookings.idempotency_key` в БД при промахе кэша (рестарт Redis и т.п.)
+  3. `UNIQUE` constraint на `idempotency_key` — финальная гарантия при гонке параллельных ретраев
 
 ---
 
@@ -96,9 +100,9 @@
 - [x] BookingRepository (existsConflictingBooking)
 - [x] BookingService (create с двойной защитой от double-booking, updateStatus)
 - [x] BookingController (POST, GET /my, GET /restaurant/{id}, PATCH /{id}/status)
-- [ ] Идемпотентность через Redis (Idempotency-Key header → кэш ответа)
-- [ ] Авто-отмена PENDING по таймауту (scheduled job)
-- [ ] Авто-перевод в COMPLETED/NO_SHOW (scheduled job)
+- [x] Идемпотентность через Redis (Idempotency-Key header → кэш ответа, DB unique constraint как финальная гарантия)
+- [x] Авто-отмена PENDING по таймауту (scheduled job)
+- [x] Авто-перевод в COMPLETED (scheduled job). NO_SHOW остаётся ручным действием персонала — нет сигнала, чтобы отличить от обычного визита
 
 ---
 

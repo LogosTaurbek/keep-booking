@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,12 +39,14 @@ public class BookingController {
 
     private final BookingService bookingService;
 
-    @Operation(summary = "Create a booking")
+    @Operation(summary = "Create a booking", description = "Pass an Idempotency-Key header to safely retry on network errors")
     @PostMapping
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<BookingDto> create(@AuthenticationPrincipal User user,
+                                              @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                               @Valid @RequestBody CreateBookingRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(bookingService.create(user.getId(), request));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(bookingService.create(user.getId(), request, idempotencyKey));
     }
 
     @Operation(summary = "Get my bookings")

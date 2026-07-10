@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
@@ -38,9 +39,23 @@ public class BookingService {
     private final RestaurantRepository restaurantRepository;
     private final TableRepository tableRepository;
     private final UserRepository userRepository;
+    private final IdempotencyService idempotencyService;
 
     @Transactional
-    public BookingDto create(Long userId, CreateBookingRequest request) {
+    public BookingDto create(Long userId, CreateBookingRequest request, String idempotencyKey) {
+        if (idempotencyKey != null) {
+            Optional<BookingDto> cached = idempotencyService.get(userId, idempotencyKey);
+            if (cached.isPresent()) {
+                return cached.get();
+            }
+            // Redis-промах (например, рестарт) — сверяемся с БД, прежде чем гонять проверки конфликтов заново
+            Optional<BookingDto> existing = bookingRepository.findByIdempotencyKey(idempotencyKey).map(this::toDto);
+            if (existing.isPresent()) {
+                idempotencyService.put(userId, idempotencyKey, existing.get());
+                return existing.get();
+            }
+        }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
 
@@ -75,15 +90,28 @@ public class BookingService {
                 .timeTo(request.getTimeTo())
                 .guestCount(request.getGuestCount())
                 .comment(request.getComment())
-                .idempotencyKey(request.getIdempotencyKey())
+                .idempotencyKey(idempotencyKey)
                 .build();
 
+        BookingDto dto;
         try {
-            return toDto(bookingRepository.save(booking));
+            dto = toDto(bookingRepository.save(booking));
         } catch (DataIntegrityViolationException e) {
-            // exclusion constraint сработал — двойная гарантия
+            if (idempotencyKey != null) {
+                // Гонка: другой запрос с тем же Idempotency-Key уже создал бронь — DB unique constraint это финальная гарантия
+                dto = bookingRepository.findByIdempotencyKey(idempotencyKey).map(this::toDto)
+                        .orElseThrow(() -> new ApiException(ErrorCode.TABLE_NOT_AVAILABLE));
+                idempotencyService.put(userId, idempotencyKey, dto);
+                return dto;
+            }
+            // exclusion constraint сработал — двойная гарантия от double-booking
             throw new ApiException(ErrorCode.TABLE_NOT_AVAILABLE);
         }
+
+        if (idempotencyKey != null) {
+            idempotencyService.put(userId, idempotencyKey, dto);
+        }
+        return dto;
     }
 
     @Transactional
