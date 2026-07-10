@@ -2,6 +2,9 @@ package com.keepbooking.restaurant.model;
 
 import java.time.LocalTime;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -36,7 +39,8 @@ public class WorkingHours {
     @JoinColumn(name = "restaurant_id", nullable = false)
     private Restaurant restaurant;
 
-    @Column(nullable = false)
+    @JdbcTypeCode(SqlTypes.SMALLINT)
+    @Column(name = "day_of_week", nullable = false)
     private Integer dayOfWeek; // 1=Mon … 7=Sun
 
     private LocalTime openTime;

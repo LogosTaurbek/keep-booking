@@ -32,7 +32,7 @@
 - [x] application.yml / application-local.yml
 - [x] Liquibase миграции V001–V004 (reference, users, restaurants, bookings)
 - [x] .gitignore
-- [ ] Gradle wrapper jar (сгенерировать: `gradle wrapper --gradle-version=9.0`)
+- [x] Gradle wrapper jar (сгенерирован, gradle 9.0.0)
 - [ ] CI (GitHub Actions): build + test + liquibase validate
 
 #### Модуль common
