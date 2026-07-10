@@ -33,6 +33,9 @@ public enum ErrorCode {
     TABLE_NOT_FOUND("TABLE_001", "Table not found", HttpStatus.NOT_FOUND),
     TABLE_NOT_AVAILABLE("TABLE_002", "Table is not available for the requested time slot", HttpStatus.CONFLICT),
 
+    // Menu
+    MENU_ITEM_NOT_FOUND("MENU_001", "Menu item not found", HttpStatus.NOT_FOUND),
+
     // Booking
     BOOKING_NOT_FOUND("BOOK_001", "Booking not found", HttpStatus.NOT_FOUND),
     BOOKING_INVALID_TIME("BOOK_002", "Booking time is invalid or in the past", HttpStatus.UNPROCESSABLE_ENTITY),

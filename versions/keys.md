@@ -92,7 +92,7 @@
 - [x] WorkingHoursController (GET + PUT full-replace /api/v1/restaurants/{id}/working-hours)
 - [x] Эндпоинт доступности: GET /restaurants/{id}/availability?date=&from=&to=&guests=
 - [ ] Загрузка фотографий (S3/MinIO)
-- [ ] Меню (MenuItem entity + CRUD)
+- [x] Меню (MenuItem entity + CRUD, /api/v1/menu-items, owner-check как у Hall/Table)
 
 #### Модуль booking
 - [x] Booking entity
