@@ -14,6 +14,7 @@ public class AppProperties {
     private Cors cors = new Cors();
     private Tokens tokens = new Tokens();
     private Booking booking = new Booking();
+    private Storage storage = new Storage();
 
     @Data
     public static class Jwt {
@@ -36,5 +37,17 @@ public class AppProperties {
     @Data
     public static class Booking {
         private long pendingTimeoutMs;
+    }
+
+    @Data
+    public static class Storage {
+        /** Endpoint used by the backend to talk to the S3-compatible service (e.g. MinIO container on the docker network). */
+        private String endpoint;
+        /** Base URL used to build publicly-reachable object links (may differ from {@code endpoint}, e.g. localhost vs container name). */
+        private String publicUrl;
+        private String region = "us-east-1";
+        private String accessKey;
+        private String secretKey;
+        private String bucket;
     }
 }

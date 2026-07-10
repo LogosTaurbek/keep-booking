@@ -7,6 +7,7 @@ Online restaurant table reservation platform.
 - Java 21 · Spring Boot 3.5.3 · Gradle 9.0
 - PostgreSQL 16 · Redis 7 · Liquibase
 - Spring Security · JWT · MapStruct · Lombok
+- MinIO (S3-compatible object storage) · AWS SDK v2
 - springdoc-openapi (Swagger) · Docker Compose · Testcontainers
 
 ## Project structure

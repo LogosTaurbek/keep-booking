@@ -28,6 +28,13 @@ ext {
     jjwtVersion = '0.12.6'
     testcontainersVersion = '1.20.5'
     springdocVersion = '2.8.6'
+    awsSdkVersion = '2.29.52'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "software.amazon.awssdk:bom:${awsSdkVersion}"
+    }
 }
 
 dependencies {
@@ -70,6 +77,9 @@ dependencies {
 
     // OpenAPI / Swagger
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
+
+    // S3-compatible object storage (MinIO in dev, S3 in prod)
+    implementation 'software.amazon.awssdk:s3'
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

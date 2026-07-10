@@ -22,6 +22,7 @@
 - Availability endpoint — `GET /api/v1/restaurants/{id}/availability?date=&from=&to=&guests=`, учитывает статус ресторана, график работы и занятость столиков
 - Меню — `MenuItem` entity (миграция V006) + CRUD `/api/v1/menu-items`, публичное чтение, владелец ресторана для записи
 - Redis-кэш справочников (`@Cacheable` для countries/cities/cuisines через `ReferenceService`, TTL 5 мин)
+- Загрузка фотографий ресторана — MinIO в docker-compose, AWS SDK v2 S3-клиент (path-style access), `RestaurantPhoto` entity (миграция V007) + `/api/v1/restaurants/{id}/photos` (upload/list/delete), публичная read-политика на bucket, лимит 5MB / jpeg,png,webp
 
 ### Added — Booking
 - Идемпотентность создания брони через заголовок `Idempotency-Key`: Redis-кэш ответа → поиск по `idempotency_key` в БД при промахе кэша → `UNIQUE` constraint как финальная гарантия при гонке
@@ -34,6 +35,8 @@
 - Идемпотентность броней: проверка конфликта (`existsConflictingBooking`) срабатывала раньше DB-фолбэка по `Idempotency-Key`, из-за чего повтор запроса после потери Redis-кэша возвращал 409 вместо исходной брони — добавлена прямая проверка по `idempotencyKey` в БД перед проверкой конфликта
 - Конфликт порта 5432 между Docker Postgres и системным PostgreSQL — `docker-compose.yml`/`application-local.yml` перемаплены на 5433
 - Reference DTO (`CountryDto`, `CityDto`, `CuisineDto`) не реализовывали `Serializable` — дефолтная JDK-сериализация Spring Boot Redis-кэша упала бы в рантайме при первой попытке закэшировать объект
+- MinIO bucket приватный по умолчанию — публичные фото ресторанов отдавали 403; добавлена read-политика `s3:GetObject` для `*` на bucket
+- `MaxUploadSizeExceededException` (файл больше лимита Spring Multipart) не обрабатывался `GlobalExceptionHandler` — падал в 500 вместо 413
 
-
-
+### Changed
+- `Co-Authored-By: Claude` trailer убран из истории коммитов (переписана история, force-push)

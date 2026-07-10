@@ -38,6 +38,11 @@ spring:
     redis:
       time-to-live: 300000
 
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
 server:
   port: ${SERVER_PORT:8080}
   error:
@@ -55,6 +60,13 @@ app:
   booking:
     pending-timeout-ms: ${BOOKING_PENDING_TIMEOUT_MS:1800000}
     scheduler-interval-ms: ${BOOKING_SCHEDULER_INTERVAL_MS:60000}
+  storage:
+    endpoint: ${STORAGE_ENDPOINT:http://localhost:9000}
+    public-url: ${STORAGE_PUBLIC_URL:http://localhost:9000}
+    region: ${STORAGE_REGION:us-east-1}
+    access-key: ${STORAGE_ACCESS_KEY:keepbooking}
+    secret-key: ${STORAGE_SECRET_KEY:keepbooking123}
+    bucket: ${STORAGE_BUCKET:keepbooking}
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:4200,http://localhost:8081}
 

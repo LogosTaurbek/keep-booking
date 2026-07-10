@@ -36,12 +36,20 @@ public enum ErrorCode {
     // Menu
     MENU_ITEM_NOT_FOUND("MENU_001", "Menu item not found", HttpStatus.NOT_FOUND),
 
+    // Restaurant photos
+    RESTAURANT_PHOTO_NOT_FOUND("PHOTO_001", "Restaurant photo not found", HttpStatus.NOT_FOUND),
+
     // Booking
     BOOKING_NOT_FOUND("BOOK_001", "Booking not found", HttpStatus.NOT_FOUND),
     BOOKING_INVALID_TIME("BOOK_002", "Booking time is invalid or in the past", HttpStatus.UNPROCESSABLE_ENTITY),
     BOOKING_GUEST_COUNT("BOOK_003", "Guest count exceeds table capacity", HttpStatus.UNPROCESSABLE_ENTITY),
     BOOKING_STATUS_TRANSITION("BOOK_004", "Invalid booking status transition", HttpStatus.UNPROCESSABLE_ENTITY),
     BOOKING_RESTAURANT_CLOSED("BOOK_005", "Restaurant is closed at the requested time", HttpStatus.UNPROCESSABLE_ENTITY),
+
+    // File storage
+    FILE_TOO_LARGE("FILE_001", "File exceeds the maximum allowed size", HttpStatus.PAYLOAD_TOO_LARGE),
+    FILE_TYPE_NOT_ALLOWED("FILE_002", "File type is not allowed", HttpStatus.UNSUPPORTED_MEDIA_TYPE),
+    FILE_UPLOAD_FAILED("FILE_003", "Failed to upload file", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // Generic
     VALIDATION_ERROR("VAL_001", "Validation failed", HttpStatus.BAD_REQUEST),

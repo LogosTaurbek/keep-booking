@@ -24,6 +24,7 @@
   1. Redis-кэш ответа по `Idempotency-Key` (быстрый путь)
   2. Поиск по `bookings.idempotency_key` в БД при промахе кэша (рестарт Redis и т.п.)
   3. `UNIQUE` constraint на `idempotency_key` — финальная гарантия при гонке параллельных ретраев
+- Файловое хранилище — AWS SDK v2 S3-клиент с `endpointOverride` на MinIO (path-style access), а не MinIO-специфичный клиент — совместимо и с реальным S3 в проде. Bucket создаётся и получает публичную read-политику при старте (`FileStorageService.ensureBucketExists`, `@PostConstruct`)
 
 ---
 
@@ -91,7 +92,7 @@
 - [x] TableController (CRUD /api/v1/tables, batch-update схемы)
 - [x] WorkingHoursController (GET + PUT full-replace /api/v1/restaurants/{id}/working-hours)
 - [x] Эндпоинт доступности: GET /restaurants/{id}/availability?date=&from=&to=&guests=
-- [ ] Загрузка фотографий (S3/MinIO)
+- [x] Загрузка фотографий (S3/MinIO): MinIO в docker-compose, AWS SDK v2 S3-клиент (path-style), `RestaurantPhoto` (миграция V007) + `/api/v1/restaurants/{id}/photos`, публичный bucket policy для чтения, лимит 5MB / jpeg,png,webp
 - [x] Меню (MenuItem entity + CRUD, /api/v1/menu-items, owner-check как у Hall/Table)
 
 #### Модуль booking
