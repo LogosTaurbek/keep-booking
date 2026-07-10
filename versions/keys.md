@@ -74,7 +74,7 @@
 - [x] Country, City, Cuisine entities
 - [x] CountryRepository, CityRepository, CuisineRepository
 - [x] ReferenceController (GET /countries, /cities, /cuisines — public)
-- [ ] Кэш в Redis (@Cacheable для справочников)
+- [x] Кэш в Redis (@Cacheable для справочников; DTO implements Serializable — дефолтная JDK-сериализация Spring Boot Redis cache)
 
 #### Модуль restaurant
 - [x] Company entity + CompanyStatus enum
