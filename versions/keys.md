@@ -38,7 +38,7 @@
 - [x] Liquibase миграции V001–V004 (reference, users, restaurants, bookings)
 - [x] .gitignore
 - [x] Gradle wrapper jar (сгенерирован, gradle 9.0.0)
-- [ ] CI (GitHub Actions): build + test + liquibase validate
+- [x] CI (GitHub Actions): `./gradlew build` — компиляция + Testcontainers-тест (реальный Postgres, все Liquibase-миграции, Hibernate schema validate) + сборка jar. Не проверено вживую в этой песочнице (несовместимость Docker API), проверка — через реальный push
 
 #### Модуль common
 - [x] BaseEntity (createdAt, updatedAt)
