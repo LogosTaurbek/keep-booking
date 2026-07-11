@@ -4,6 +4,13 @@
 
 ## [Unreleased] — 2026-07-11
 
+### Fixed
+- `BookingDto` не имел no-args конструктора (`@Data @Builder` без `@NoArgsConstructor`), из-за чего `IdempotencyService.get()` никогда не мог десериализовать закэшированный ответ из Redis — каждый cache hit тихо трактовался как cache miss (перехватывалось и логировалось как warning). Redis-кэш идемпотентности не работал с момента внедрения; спасал только DB-фоллбэк по `idempotency_key`, поэтому баг не проявлялся в ручном/curl-тестировании. Найдено при написании `IdempotencyServiceTest`. Исправлено добавлением `@NoArgsConstructor @AllArgsConstructor`
+
+### Added — Тесты RestaurantService/UserService/WorkingHoursService/BookingScheduler/Idempotency
+- `RestaurantServiceTest` (9 unit-тестов), `UserServiceTest` (9), `WorkingHoursServiceTest` (6), `BookingSchedulerServiceTest` (4), `IdempotencyServiceTest` (5)
+- Итого 178 unit-тестов реально прогнаны и зелёные (+ 1 integration-тест подтверждён в CI)
+
 ### Added — Тесты rate limiting и search-фильтров
 - `RateLimitServiceTest` (4 unit-теста) — контракт tryConsume: true при current<=limit, false при превышении, fail-closed при null от Redis
 - `RateLimitFilterTest` (7 unit-тестов) — exempt-пути, auth vs general лимит/окно, X-Forwarded-For приоритет над remoteAddr, форма 429-ответа

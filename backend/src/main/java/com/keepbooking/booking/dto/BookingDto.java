@@ -6,11 +6,20 @@ import java.time.LocalTime;
 
 import com.keepbooking.booking.model.BookingStatus;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
+/**
+ * The only DTO in the codebase Jackson actually deserializes (IdempotencyService.get()
+ * reads it back from Redis) rather than just serializes as a response body — needs a
+ * no-args constructor for that, unlike every other @Builder DTO here.
+ */
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class BookingDto {
     private Long id;
     private Long restaurantId;
