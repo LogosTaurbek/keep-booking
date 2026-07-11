@@ -4,6 +4,11 @@
 
 ## [Unreleased] — 2026-07-11
 
+### Added — Тесты NotificationService/SearchHistoryService
+- `NotificationServiceTest` (5 unit-тестов) — markAsRead (не найдено/чужое/успех), markAllAsRead
+- `SearchHistoryServiceTest` (6 unit-тестов) — тихий no-op при анонимном или беcфильтровом поиске, сохранение при наличии фильтра
+- Итого 125 unit-тестов реально прогнаны и зелёные (+ 1 integration-тест подтверждён в CI)
+
 ### Added — Тесты MenuItemService/RestaurantPhotoService
 - `MenuItemServiceTest` (9 unit-тестов) — owner-check CRUD, дефолт position=0, частичный update
 - `RestaurantPhotoServiceTest` (7 unit-тестов) — owner-check, авто-инкремент position, delete проверяет принадлежность фото указанному restaurantId (не только существование), удаление файла из storage
