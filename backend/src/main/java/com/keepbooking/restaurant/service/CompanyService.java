@@ -2,10 +2,13 @@ package com.keepbooking.restaurant.service;
 
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.keepbooking.common.dto.PageResponse;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
 import com.keepbooking.restaurant.dto.CompanyDto;
@@ -53,6 +56,20 @@ public class CompanyService {
                 .orElseThrow(() -> new ApiException(ErrorCode.COMPANY_NOT_FOUND));
         verifyOwner(company, userId);
         return toDto(company);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<CompanyDto> getAllCompanies(Pageable pageable) {
+        Page<Company> page = companyRepository.findAll(pageable);
+        return PageResponse.of(page.map(this::toDto));
+    }
+
+    @Transactional
+    public void setBlocked(Long companyId, boolean blocked) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new ApiException(ErrorCode.COMPANY_NOT_FOUND));
+        company.setStatus(blocked ? CompanyStatus.BLOCKED : CompanyStatus.ACTIVE);
+        companyRepository.save(company);
     }
 
     private void verifyOwner(Company company, Long userId) {

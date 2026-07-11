@@ -4,6 +4,11 @@
 
 ## [Unreleased] — 2026-07-11
 
+### Added — Суперадмин панель
+- Новый модуль `admin`: `GET/PATCH /api/v1/admin/users` (список, block/unblock), `GET/PATCH /api/v1/admin/companies` (список, block/unblock), `GET/PATCH /api/v1/admin/restaurants` (список по статусу, approve/reject с причиной, block), `DELETE /api/v1/admin/reviews/{id}`, `GET /api/v1/admin/stats`
+- Все эндпоинты только для `SUPER_ADMIN`, все мутирующие действия пишутся в `audit_log`
+- Реализовано расширением существующих `UserService`/`CompanyService`/`RestaurantService`/`ReviewService`, а не отдельным дублирующим слоем логики
+
 ### Added — Тесты критичного пути бронирования
 - `BookingStatusTest` (14 unit-тестов) — вся state machine `BookingStatus.canTransitionTo()`
 - `BookingServiceTest` (15 unit-тестов, Mockito) — все проверки перед созданием брони и при смене статуса, идемпотентность по кэшу. Реально прогнаны локально (29/29 зелёных, подтверждено по XML-отчётам, не только по "BUILD SUCCESSFUL")

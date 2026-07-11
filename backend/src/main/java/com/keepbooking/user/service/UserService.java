@@ -1,8 +1,11 @@
 package com.keepbooking.user.service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.keepbooking.common.dto.PageResponse;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
 import com.keepbooking.reference.repository.CityRepository;
@@ -53,6 +56,20 @@ public class UserService {
         user.setStatus(UserStatus.DELETED);
         user.setDeletedAt(java.time.Instant.now());
         user.setEmail(user.getEmail() + ".deleted." + userId);
+        userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<UserProfileDto> getAllUsers(Pageable pageable) {
+        Page<User> page = userRepository.findAll(pageable);
+        return PageResponse.of(page.map(userMapper::toDto));
+    }
+
+    @Transactional
+    public void setBlocked(Long userId, boolean blocked) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
+        user.setStatus(blocked ? UserStatus.BLOCKED : UserStatus.ACTIVE);
         userRepository.save(user);
     }
 

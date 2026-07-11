@@ -136,7 +136,14 @@
 ### Этап 3
 
 - [ ] Аналитика (read-модели для ресторана и супер-админа)
-- [ ] Суперадмин панель (модерация, блокировки, статистика)
+- [x] Суперадмин панель — новый модуль `admin` (@PreAuthorize("hasRole('SUPER_ADMIN')") на весь класс):
+  - GET/PATCH /api/v1/admin/users (список, block/unblock — блокировка реально мешает логину через UserDetails.isAccountNonLocked)
+  - GET/PATCH /api/v1/admin/companies (список, block/unblock)
+  - GET/PATCH /api/v1/admin/restaurants (список по статусу, approve/reject с причиной/block)
+  - DELETE /api/v1/admin/reviews/{id} (пересчитывает рейтинг ресторана)
+  - GET /api/v1/admin/stats (пользователи/компании/рестораны/брони по статусам)
+  - Все мутирующие действия пишутся в audit_log (actorId = админ, details = причина для reject)
+  - Реализовано расширением существующих UserService/CompanyService/RestaurantService/ReviewService, а не дублированием логики в отдельном admin-сервисе (только AdminStatsService — агрегация счётчиков)
 - [ ] Лист ожидания
 - [ ] Предзаказ блюд
 - [ ] Онлайн-оплата депозита

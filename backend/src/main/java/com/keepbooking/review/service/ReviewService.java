@@ -72,6 +72,15 @@ public class ReviewService {
         return PageResponse.of(page.map(this::toDto));
     }
 
+    @Transactional
+    public void delete(Long reviewId) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ApiException(ErrorCode.REVIEW_NOT_FOUND));
+        Long restaurantId = review.getRestaurant().getId();
+        reviewRepository.delete(review);
+        recalculateRestaurantRating(restaurantId);
+    }
+
     private void recalculateRestaurantRating(Long restaurantId) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));

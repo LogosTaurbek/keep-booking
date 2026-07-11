@@ -42,6 +42,7 @@ public enum ErrorCode {
     // Reviews
     REVIEW_ALREADY_EXISTS("REVIEW_001", "A review already exists for this booking", HttpStatus.CONFLICT),
     REVIEW_BOOKING_NOT_COMPLETED("REVIEW_002", "Booking must be completed before leaving a review", HttpStatus.UNPROCESSABLE_ENTITY),
+    REVIEW_NOT_FOUND("REVIEW_003", "Review not found", HttpStatus.NOT_FOUND),
 
     // Booking
     BOOKING_NOT_FOUND("BOOK_001", "Booking not found", HttpStatus.NOT_FOUND),

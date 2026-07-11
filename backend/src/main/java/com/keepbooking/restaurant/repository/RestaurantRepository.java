@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.repository.query.Param;
 
 import com.keepbooking.restaurant.model.Restaurant;
+import com.keepbooking.restaurant.model.RestaurantStatus;
 
 public interface RestaurantRepository extends JpaRepository<Restaurant, Long>, JpaSpecificationExecutor<Restaurant> {
 
@@ -19,6 +20,10 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long>, J
     Optional<Restaurant> findByIdAndCompanyId(Long id, Long companyId);
 
     Optional<Restaurant> findByIdAndCompanyOwnerId(Long id, Long ownerId);
+
+    Page<Restaurant> findByStatus(RestaurantStatus status, Pageable pageable);
+
+    long countByStatus(RestaurantStatus status);
 
     // earth_box(...) @> is an index-friendly bounding-cube pre-filter (cube/earthdistance extensions);
     // the exact earth_distance(...) <= check is still needed since earth_box approximates a circle with a box.

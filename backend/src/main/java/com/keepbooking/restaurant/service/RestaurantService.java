@@ -23,6 +23,7 @@ import com.keepbooking.restaurant.dto.CreateRestaurantRequest;
 import com.keepbooking.restaurant.dto.RestaurantDto;
 import com.keepbooking.restaurant.model.Company;
 import com.keepbooking.restaurant.model.Restaurant;
+import com.keepbooking.restaurant.model.RestaurantStatus;
 import com.keepbooking.restaurant.repository.CompanyRepository;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.restaurant.repository.RestaurantSpecifications;
@@ -101,6 +102,20 @@ public class RestaurantService {
                 .flatMap(c -> restaurantRepository.findByCompanyId(c.getId()).stream())
                 .map(this::toDto)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<RestaurantDto> getByStatus(RestaurantStatus status, Pageable pageable) {
+        Page<Restaurant> page = restaurantRepository.findByStatus(status, pageable);
+        return PageResponse.of(page.map(this::toDto));
+    }
+
+    @Transactional
+    public RestaurantDto moderate(Long restaurantId, RestaurantStatus newStatus) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
+        restaurant.setStatus(newStatus);
+        return toDto(restaurantRepository.save(restaurant));
     }
 
     private RestaurantDto toDto(Restaurant r) {
