@@ -80,7 +80,7 @@ public class BookingService {
             throw new ApiException(ErrorCode.RESTAURANT_NOT_ACTIVE);
         }
 
-        validateBookingTime(request.getBookingDate(), request.getTimeFrom(), request.getTimeTo());
+        validateBookingTime(request.getBookingDate(), request.getTimeFrom(), request.getTimeTo(), restaurant.getTimezone());
         validateGuestCount(table, request.getGuestCount());
 
         // Проверка конфликта в JPQL (резервная, exclusion constraint в БД — финальная гарантия)
@@ -187,12 +187,13 @@ public class BookingService {
         return PageResponse.of(bookingRepository.findByRestaurantIdOrderByBookingDateDesc(restaurantId, pageable).map(this::toDto));
     }
 
-    private void validateBookingTime(LocalDate date, LocalTime from, LocalTime to) {
+    private void validateBookingTime(LocalDate date, LocalTime from, LocalTime to, String restaurantTimezone) {
         if (!from.isBefore(to)) {
             throw new ApiException(ErrorCode.BOOKING_INVALID_TIME, "timeFrom must be before timeTo");
         }
+        // date/from are local to the restaurant's own timezone, not UTC - "now" must be compared in that same zone
         LocalDateTime start = LocalDateTime.of(date, from);
-        if (start.isBefore(LocalDateTime.now(ZoneId.of("UTC")))) {
+        if (start.isBefore(LocalDateTime.now(ZoneId.of(restaurantTimezone)))) {
             throw new ApiException(ErrorCode.BOOKING_INVALID_TIME, "Booking time is in the past");
         }
     }

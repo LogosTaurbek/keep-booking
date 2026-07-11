@@ -42,7 +42,7 @@ public class AvailabilityService {
             throw new ApiException(ErrorCode.RESTAURANT_NOT_ACTIVE);
         }
 
-        validateTimeRange(date, from, to);
+        validateTimeRange(date, from, to, restaurant.getTimezone());
         validateOpenHours(restaurantId, date, from, to);
 
         List<RestaurantTable> candidates = tableRepository.findCandidatesForAvailability(restaurantId, guests);
@@ -55,11 +55,12 @@ public class AvailabilityService {
                 .toList();
     }
 
-    private void validateTimeRange(LocalDate date, LocalTime from, LocalTime to) {
+    private void validateTimeRange(LocalDate date, LocalTime from, LocalTime to, String restaurantTimezone) {
         if (!from.isBefore(to)) {
             throw new ApiException(ErrorCode.BOOKING_INVALID_TIME, "from must be before to");
         }
-        if (LocalDateTime.of(date, from).isBefore(LocalDateTime.now(ZoneId.of("UTC")))) {
+        // date/from are local to the restaurant's own timezone, not UTC - "now" must be compared in that same zone
+        if (LocalDateTime.of(date, from).isBefore(LocalDateTime.now(ZoneId.of(restaurantTimezone)))) {
             throw new ApiException(ErrorCode.BOOKING_INVALID_TIME, "Requested time is in the past");
         }
     }
