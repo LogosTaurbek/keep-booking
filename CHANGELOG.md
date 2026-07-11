@@ -9,6 +9,12 @@
 - Все эндпоинты только для `SUPER_ADMIN`, все мутирующие действия пишутся в `audit_log`
 - Реализовано расширением существующих `UserService`/`CompanyService`/`RestaurantService`/`ReviewService`, а не отдельным дублирующим слоем логики
 
+### Added — Тесты авторизации и доступности
+- `AuthServiceTest` (16 unit-тестов) — регистрация, login, refresh-ротация, verify-email, forgot/reset/change password. Реальный `JwtTokenProvider`, не мок
+- `AvailabilityServiceTest` (9 unit-тестов) — все проверки доступности столиков (статус ресторана, время, график работы, фильтрация занятых)
+- `BookingConcurrencyIntegrationTest` подтверждён зелёным в реальном GitHub Actions CI (не только компилируется — реально проверяет double-booking guarantee под конкурентной нагрузкой)
+- Итого 54 unit-теста реально прогнаны и зелёные — все критичные пути из tz2.txt §21 (авторизация, брони, доступность, права доступа) теперь покрыты
+
 ### Added — Тесты критичного пути бронирования
 - `BookingStatusTest` (14 unit-тестов) — вся state machine `BookingStatus.canTransitionTo()`
 - `BookingServiceTest` (15 unit-тестов, Mockito) — все проверки перед созданием брони и при смене статуса, идемпотентность по кэшу. Реально прогнаны локально (29/29 зелёных, подтверждено по XML-отчётам, не только по "BUILD SUCCESSFUL")
