@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.keepbooking.common.dto.PageResponse;
+import com.keepbooking.history.service.SearchHistoryService;
 import com.keepbooking.restaurant.dto.CreateRestaurantRequest;
 import com.keepbooking.restaurant.dto.RestaurantDto;
 import com.keepbooking.restaurant.service.RestaurantService;
@@ -36,16 +37,19 @@ import lombok.RequiredArgsConstructor;
 public class RestaurantController {
 
     private final RestaurantService restaurantService;
+    private final SearchHistoryService searchHistoryService;
 
     @Operation(summary = "Search active restaurants (public): name, cuisine, city, min rating")
     @GetMapping
     public ResponseEntity<PageResponse<RestaurantDto>> list(
+            @AuthenticationPrincipal User user,
             @RequestParam(required = false) Long cityId,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String cuisine,
             @RequestParam(required = false) BigDecimal minRating,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        searchHistoryService.record(user != null ? user.getId() : null, name, cuisine, cityId, minRating);
         var pageable = PageRequest.of(page, Math.min(size, 100), Sort.by("rating").descending());
         return ResponseEntity.ok(restaurantService.search(cityId, name, cuisine, minRating, pageable));
     }

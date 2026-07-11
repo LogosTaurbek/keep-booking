@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.keepbooking.booking.dto.BookingDto;
 import com.keepbooking.booking.dto.CreateBookingRequest;
 import com.keepbooking.booking.dto.UpdateBookingStatusRequest;
+import com.keepbooking.booking.model.BookingStatus;
 import com.keepbooking.booking.service.BookingService;
 import com.keepbooking.common.dto.PageResponse;
 import com.keepbooking.user.model.User;
@@ -49,15 +50,16 @@ public class BookingController {
                 .body(bookingService.create(user.getId(), request, idempotencyKey));
     }
 
-    @Operation(summary = "Get my bookings")
+    @Operation(summary = "Get my bookings (optionally filter by status, e.g. COMPLETED for visit history)")
     @GetMapping("/my")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PageResponse<BookingDto>> getMyBookings(
             @AuthenticationPrincipal User user,
+            @RequestParam(required = false) BookingStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         var pageable = PageRequest.of(page, size, Sort.by("bookingDate").descending());
-        return ResponseEntity.ok(bookingService.getMyBookings(user.getId(), pageable));
+        return ResponseEntity.ok(bookingService.getMyBookings(user.getId(), status, pageable));
     }
 
     @Operation(summary = "Get restaurant bookings (manager only)")

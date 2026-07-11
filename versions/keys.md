@@ -113,7 +113,7 @@
 
 - [x] Избранное (Favorite entity, миграция V008, GET/POST/DELETE /api/v1/favorites — идемпотентные add/remove, unique constraint (user_id, restaurant_id))
 - [x] Отзывы (Review entity, миграция V009, POST /api/v1/reviews + GET /api/v1/restaurants/{id}/reviews + GET /api/v1/reviews/my; только после COMPLETED-брони, 1 отзыв на бронь; пересчитывает Restaurant.rating/reviewsCount)
-- [ ] История (посещения, поиски)
+- [x] История (посещения, поиски): GET /api/v1/bookings/my?status= (переиспользует bookings, без нового модуля для визитов) + новый модуль `history` — SearchHistory (миграция V011), GET /api/v1/search-history/my; логируется только для авторизованных при непустых фильтрах
 - [x] Поиск с фильтрами (название, кухня, рейтинг) — GET /api/v1/restaurants?name=&cuisine=&minRating=&cityId=, через Specification API (JpaSpecificationExecutor)
 - [x] Карта / радиус — GET /api/v1/restaurants/nearby?lat=&lng=&radiusKm=, PostgreSQL cube+earthdistance extensions (миграция V010), earth_box index-friendly pre-filter + точная earth_distance проверка
 - [ ] Push-уведомления (Firebase FCM, transactional outbox)

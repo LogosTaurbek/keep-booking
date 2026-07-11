@@ -9,6 +9,7 @@
 - Отзывы — новый модуль `review`: `Review` entity (миграция V009), `POST /api/v1/reviews` (только после `COMPLETED`-брони, 1 отзыв на бронь), `GET /api/v1/restaurants/{id}/reviews` (публично), `GET /api/v1/reviews/my`. Пересчитывает `Restaurant.rating`/`reviewsCount` синхронно при создании отзыва
 - Поиск ресторанов с фильтрами — `GET /api/v1/restaurants?name=&cuisine=&minRating=&cityId=`, композиция через `RestaurantSpecifications` (Spring Data JPA Specification API)
 - Геопоиск/карта — `GET /api/v1/restaurants/nearby?lat=&lng=&radiusKm=`, PostgreSQL `cube`+`earthdistance` extensions (миграция V010)
+- История — `GET /api/v1/bookings/my?status=` для истории посещений (переиспользует существующий booking-эндпоинт); новый модуль `history` — `SearchHistory` entity (миграция V011), `GET /api/v1/search-history/my`, логируется только для авторизованных пользователей при непустых фильтрах поиска
 
 ### Fixed
 - `MissingServletRequestParameterException` и `MethodArgumentTypeMismatchException` не обрабатывались `GlobalExceptionHandler` — отсутствующий или некорректный query-параметр падал в 500 вместо 400. Фиксит все query-параметры по проекту, не только `/restaurants/nearby`

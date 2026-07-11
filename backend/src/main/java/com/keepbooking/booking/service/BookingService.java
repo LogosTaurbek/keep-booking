@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -142,8 +143,11 @@ public class BookingService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<BookingDto> getMyBookings(Long userId, Pageable pageable) {
-        return PageResponse.of(bookingRepository.findByUserIdOrderByBookingDateDesc(userId, pageable).map(this::toDto));
+    public PageResponse<BookingDto> getMyBookings(Long userId, BookingStatus status, Pageable pageable) {
+        Page<Booking> page = status != null
+                ? bookingRepository.findByUserIdAndStatusOrderByBookingDateDesc(userId, status, pageable)
+                : bookingRepository.findByUserIdOrderByBookingDateDesc(userId, pageable);
+        return PageResponse.of(page.map(this::toDto));
     }
 
     @Transactional(readOnly = true)
