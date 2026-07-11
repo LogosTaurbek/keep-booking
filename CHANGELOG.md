@@ -9,6 +9,9 @@
 - `BookingServiceTest` (15 unit-тестов, Mockito) — все проверки перед созданием брони и при смене статуса, идемпотентность по кэшу. Реально прогнаны локально (29/29 зелёных, подтверждено по XML-отчётам, не только по "BUILD SUCCESSFUL")
 - `BookingConcurrencyIntegrationTest` (Testcontainers) — 10 параллельных запросов на один стол/слот → ровно 1 успех (tz2.txt §11.2). Компилируется, но не прогнан в этой песочнице — известная несовместимость Docker API с Testcontainers (см. CI); ожидает подтверждения в GitHub Actions
 
+### Fixed
+- CI: Testcontainers/Postgres/Redis в GitHub Actions отработали нормально (в отличие от локальной песочницы), но `@SpringBootTest`-контексты (`KeepBookingApplicationTests`, `BookingConcurrencyIntegrationTest`) падали при старте — `FileStorageService.ensureBucketExists()` (`@PostConstruct`) не мог достучаться до MinIO, которого не было в CI-воркфлоу. MinIO нельзя поднять через `services:` (образу нужна кастомная команда, которую `services:` не поддерживает) — добавлен явный шаг `docker run minio/minio server /data ...` + health-check перед сборкой
+
 ### Added — Этап 2
 - Избранное — новый модуль `favorite`: `Favorite` entity (миграция V008, unique constraint `user_id, restaurant_id`), `GET/POST/DELETE /api/v1/favorites`, add/remove идемпотентны, список отдаёт `RestaurantDto` (JOIN FETCH, без N+1)
 - Отзывы — новый модуль `review`: `Review` entity (миграция V009), `POST /api/v1/reviews` (только после `COMPLETED`-брони, 1 отзыв на бронь), `GET /api/v1/restaurants/{id}/reviews` (публично), `GET /api/v1/reviews/my`. Пересчитывает `Restaurant.rating`/`reviewsCount` синхронно при создании отзыва

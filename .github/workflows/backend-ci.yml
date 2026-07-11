@@ -45,6 +45,20 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # MinIO isn't supported via the `services:` block (its image needs a custom
+      # command, which `services:` can't override), so start it directly. Credentials
+      # match the app's default config (application.yml STORAGE_ACCESS_KEY/SECRET_KEY)
+      # so no extra env overrides are needed for the test context.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=keepbooking -e MINIO_ROOT_PASSWORD=keepbooking123 \
+            minio/minio server /data --console-address ":9001"
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            sleep 2
+          done
+
       # `gradlew build` compiles, runs the Testcontainers-backed context-load test
       # (spins up real Postgres, applies every Liquibase changeset, then validates
       # the JPA mappings against the resulting schema) and assembles the jar —
