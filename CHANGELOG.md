@@ -4,6 +4,12 @@
 
 ## [Unreleased] — 2026-07-11
 
+### Added — Тесты rate limiting и search-фильтров
+- `RateLimitServiceTest` (4 unit-теста) — контракт tryConsume: true при current<=limit, false при превышении, fail-closed при null от Redis
+- `RateLimitFilterTest` (7 unit-тестов) — exempt-пути, auth vs general лимит/окно, X-Forwarded-For приоритет над remoteAddr, форма 429-ответа
+- `RestaurantSpecificationsTest` (9 unit-тестов) — каждый опциональный фильтр возвращает null Predicate при null/blank входе (иначе AND-комбинирование в поиске сломается), корректный predicate/join/distinct при непустом значении
+- Итого 145 unit-тестов реально прогнаны и зелёные (+ 1 integration-тест подтверждён в CI). Единственный намеренно не покрытый юнит-тестами кусок — `AdminStatsService` (чистая агрегация count())
+
 ### Added — Тесты NotificationService/SearchHistoryService
 - `NotificationServiceTest` (5 unit-тестов) — markAsRead (не найдено/чужое/успех), markAllAsRead
 - `SearchHistoryServiceTest` (6 unit-тестов) — тихий no-op при анонимном или беcфильтровом поиске, сохранение при наличии фильтра
