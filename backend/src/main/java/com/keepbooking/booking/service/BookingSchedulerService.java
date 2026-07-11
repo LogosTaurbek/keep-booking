@@ -18,6 +18,7 @@ import com.keepbooking.common.config.AppProperties;
 import com.keepbooking.notification.model.NotificationType;
 import com.keepbooking.notification.service.NotificationService;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,6 +36,7 @@ public class BookingSchedulerService {
     private final AppProperties appProperties;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final MeterRegistry meterRegistry;
 
     @Scheduled(fixedDelayString = "${app.booking.scheduler-interval-ms:60000}")
     @Transactional
@@ -55,6 +57,7 @@ public class BookingSchedulerService {
                     "Your booking at " + b.getRestaurant().getName() + " on " + b.getBookingDate()
                             + " was auto-cancelled — the restaurant didn't confirm it in time");
             auditLogService.record(null, "BOOKING_AUTO_CANCELLED", "Booking", b.getId(), "PENDING -> CANCELLED (timeout)");
+            meterRegistry.counter("bookings.status.transitions.total", "status", "CANCELLED", "trigger", "auto").increment();
         });
         log.info("Auto-cancelled {} expired PENDING bookings", expired.size());
     }
@@ -75,6 +78,7 @@ public class BookingSchedulerService {
                     "Visit completed",
                     "Thanks for visiting " + b.getRestaurant().getName() + "! Leave a review to share your experience");
             auditLogService.record(null, "BOOKING_AUTO_COMPLETED", "Booking", b.getId(), "CONFIRMED -> COMPLETED (auto)");
+            meterRegistry.counter("bookings.status.transitions.total", "status", "COMPLETED", "trigger", "auto").increment();
         });
         log.info("Auto-completed {} past CONFIRMED bookings", toComplete.size());
     }

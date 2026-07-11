@@ -12,6 +12,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 import com.keepbooking.booking.dto.BookingDto;
 import com.keepbooking.booking.dto.CreateBookingRequest;
 import com.keepbooking.booking.dto.UpdateBookingStatusRequest;
@@ -46,6 +48,7 @@ public class BookingService {
     private final IdempotencyService idempotencyService;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final MeterRegistry meterRegistry;
 
     @Transactional
     public BookingDto create(Long userId, CreateBookingRequest request, String idempotencyKey) {
@@ -102,6 +105,9 @@ public class BookingService {
         BookingDto dto;
         try {
             dto = toDto(bookingRepository.save(booking));
+            // NB: avoid the literal word "created" in the metric name — Micrometer's Prometheus
+            // naming convention silently swallows it (collides with the OpenMetrics "_created" series convention)
+            meterRegistry.counter("bookings.new.total").increment();
         } catch (DataIntegrityViolationException e) {
             if (idempotencyKey != null) {
                 // Гонка: другой запрос с тем же Idempotency-Key уже создал бронь — DB unique constraint это финальная гарантия
@@ -149,6 +155,7 @@ public class BookingService {
         sendStatusNotification(saved, next);
         auditLogService.record(userId, "BOOKING_STATUS_CHANGED", "Booking", saved.getId(),
                 previous + " -> " + next);
+        meterRegistry.counter("bookings.status.transitions.total", "status", next.name(), "trigger", "manual").increment();
         return toDto(saved);
     }
 

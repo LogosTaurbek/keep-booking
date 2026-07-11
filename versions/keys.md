@@ -123,7 +123,7 @@
 - [x] Rate limiting — свой fixed-window лимитер на Redis (atomic Lua INCR+PEXPIRE), не Bucket4j (риск неверных Maven-координат без интернета). `RateLimitFilter` перед JwtAuthFilter, general 100/60с + строгий auth 10/60с на /api/v1/auth/**, по IP (X-Forwarded-For/remoteAddr), исключения — actuator/health, swagger, api-docs
 - [x] Structured JSON логи — logback-spring.xml, `net.logstash.logback:logstash-logback-encoder`. JSON везде кроме local-профиля (там читаемый паттерн). `RequestIdFilter` кладёт correlation ID в MDC (X-Request-Id из заголовка или генерируется), попадает в каждую JSON-строку лога
 - [x] Audit log — таблица audit_log (миграция V013), `AuditLogService.record(actorId, action, entityType, entityId, details)`, actorId nullable для system/scheduled действий. GET /api/v1/audit-log?entityType=&entityId= (SUPER_ADMIN only). Подключено к BookingService.updateStatus + BookingSchedulerService (auto-cancel/auto-complete)
-- [ ] Метрики (Micrometer → Prometheus → Grafana)
+- [x] Метрики — добавлена `micrometer-registry-prometheus` (её не было, /actuator/prometheus падал в 500 несмотря на упоминание в конфиге). /actuator/prometheus публичный (как /actuator/health) — Prometheus-скрейпер не шлёт JWT. Кастомные счётчики: `bookings.new.total`, `bookings.status.transitions.total{status,trigger}` (trigger=manual|auto). HTTP-latency по эндпоинтам уже бесплатно даёт Spring Boot (`http.server.requests`). Grafana не настраивал — только экспорт метрик
 - [ ] Трейсинг (OpenTelemetry)
 
 ### Этап 3
