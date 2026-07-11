@@ -26,6 +26,13 @@
   3. `UNIQUE` constraint на `idempotency_key` — финальная гарантия при гонке параллельных ретраев
 - Файловое хранилище — AWS SDK v2 S3-клиент с `endpointOverride` на MinIO (path-style access), а не MinIO-специфичный клиент — совместимо и с реальным S3 в проде. Bucket создаётся и получает публичную read-политику при старте (`FileStorageService.ensureBucketExists`, `@PostConstruct`)
 - `Restaurant.rating`/`reviewsCount` пересчитываются синхронно при создании отзыва (`ReviewService.recalculateRestaurantRating` — AVG/COUNT одним запросом), а не хранятся денормализованно без источника истины
+
+## Тесты (критичный путь бронирования)
+
+- `BookingStatusTest` (unit, 14 тестов) — state machine, все переходы + терминальные статусы. Прогнан локально, зелёный.
+- `BookingServiceTest` (unit/Mockito, 15 тестов) — все проверки перед созданием брони (стол/ресторан не найден/не активен, время в прошлом, вместимость, конфликт слота, идемпотентность), проверки владения при смене статуса. Прогнан локально, зелёный.
+- `BookingConcurrencyIntegrationTest` (Testcontainers) — 10 параллельных запросов на один стол/слот → ровно 1 успех, остальные `TABLE_NOT_AVAILABLE` (главный тест-кейс по tz2.txt §11.2/§21). Компилируется, но **не прогнан** в этой песочнице — та же несовместимость Docker API, что и у `KeepBookingApplicationTests` (см. CI). Должен пройти в GitHub Actions — требует подтверждения после push.
+- Остальное покрытие (auth, favorites, reviews, restaurant CRUD и т.д.) — НЕ покрыто автотестами, всё тестировалось только вручную через curl в течение сессии. До цели tz2 (≥70% покрытия доменной логики) далеко.
 - Геопоиск — PostgreSQL `cube`/`earthdistance` (contrib-модули, как `btree_gist` для double-booking), не PostGIS: `earth_box(...) @>` как index-friendly предфильтр по кубу + точный `earth_distance(...) <=` для реального круга радиуса
 - Rate limiting — hand-rolled на Redis вместо Bucket4j (не было интернета проверить актуальные Maven-координаты/API 8.x). Fixed-window, atomic INCR+PEXPIRE через Lua-скрипт (аналогично IdempotencyService). `RateLimitFilter` регистрируется через `.addFilterBefore(jwtAuthFilter, ...)` СНАЧАЛА, затем `.addFilterBefore(rateLimitFilter, JwtAuthFilter.class)` — иначе Spring Security падает с "Filter class does not have a registered order" (нельзя ссылаться на custom-фильтр как якорь до его собственной регистрации)
 - Audit log намеренно НЕ пытается покрыть все действия в проекте — только переходы статуса брони (самое бизнес-критичное). Не проектировали заранее generic audit-aspect/interceptor под гипотетические будущие сущности
