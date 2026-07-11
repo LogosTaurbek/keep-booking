@@ -14,6 +14,8 @@ import com.keepbooking.booking.model.Booking;
 import com.keepbooking.booking.model.BookingStatus;
 import com.keepbooking.booking.repository.BookingRepository;
 import com.keepbooking.common.config.AppProperties;
+import com.keepbooking.notification.model.NotificationType;
+import com.keepbooking.notification.service.NotificationService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +32,7 @@ public class BookingSchedulerService {
 
     private final BookingRepository bookingRepository;
     private final AppProperties appProperties;
+    private final NotificationService notificationService;
 
     @Scheduled(fixedDelayString = "${app.booking.scheduler-interval-ms:60000}")
     @Transactional
@@ -44,6 +47,10 @@ public class BookingSchedulerService {
             b.setCancelReason("Auto-cancelled: not confirmed within timeout");
         });
         bookingRepository.saveAll(expired);
+        expired.forEach(b -> notificationService.notifyBookingStatusChange(b, NotificationType.BOOKING_CANCELLED,
+                "Booking cancelled",
+                "Your booking at " + b.getRestaurant().getName() + " on " + b.getBookingDate()
+                        + " was auto-cancelled — the restaurant didn't confirm it in time"));
         log.info("Auto-cancelled {} expired PENDING bookings", expired.size());
     }
 
@@ -58,6 +65,9 @@ public class BookingSchedulerService {
         }
         toComplete.forEach(b -> b.setStatus(BookingStatus.COMPLETED));
         bookingRepository.saveAll(toComplete);
+        toComplete.forEach(b -> notificationService.notifyBookingStatusChange(b, NotificationType.BOOKING_COMPLETED,
+                "Visit completed",
+                "Thanks for visiting " + b.getRestaurant().getName() + "! Leave a review to share your experience"));
         log.info("Auto-completed {} past CONFIRMED bookings", toComplete.size());
     }
 }

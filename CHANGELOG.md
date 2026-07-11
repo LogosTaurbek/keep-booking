@@ -11,6 +11,7 @@
 - Геопоиск/карта — `GET /api/v1/restaurants/nearby?lat=&lng=&radiusKm=`, PostgreSQL `cube`+`earthdistance` extensions (миграция V010)
 - История — `GET /api/v1/bookings/my?status=` для истории посещений (переиспользует существующий booking-эндпоинт); новый модуль `history` — `SearchHistory` entity (миграция V011), `GET /api/v1/search-history/my`, логируется только для авторизованных пользователей при непустых фильтрах поиска
 - Rate limiting — `RateLimitFilter` + `RateLimitService`, fixed-window счётчик на Redis (atomic Lua INCR+PEXPIRE). General 100 запросов/60с + строгий лимит 10/60с на `/api/v1/auth/**`, ключ по IP. Не Bucket4j (см. Fixed) — hand-rolled решение по тому же паттерну, что `IdempotencyService`
+- In-app уведомления — новый модуль `notification`: `Notification` entity (миграция V012), `GET /api/v1/notifications/my`, `/unread-count`, `PATCH /{id}/read`, `POST /read-all`. Триггерится из `BookingService.updateStatus` и `BookingSchedulerService` при переходах в `CONFIRMED`/`REJECTED`/`CANCELLED`/`COMPLETED`. Push (Firebase FCM) отложен — нужны внешние credentials
 
 ### Fixed
 - `MissingServletRequestParameterException` и `MethodArgumentTypeMismatchException` не обрабатывались `GlobalExceptionHandler` — отсутствующий или некорректный query-параметр падал в 500 вместо 400. Фиксит все query-параметры по проекту, не только `/restaurants/nearby`

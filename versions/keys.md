@@ -117,8 +117,8 @@
 - [x] История (посещения, поиски): GET /api/v1/bookings/my?status= (переиспользует bookings, без нового модуля для визитов) + новый модуль `history` — SearchHistory (миграция V011), GET /api/v1/search-history/my; логируется только для авторизованных при непустых фильтрах
 - [x] Поиск с фильтрами (название, кухня, рейтинг) — GET /api/v1/restaurants?name=&cuisine=&minRating=&cityId=, через Specification API (JpaSpecificationExecutor)
 - [x] Карта / радиус — GET /api/v1/restaurants/nearby?lat=&lng=&radiusKm=, PostgreSQL cube+earthdistance extensions (миграция V010), earth_box index-friendly pre-filter + точная earth_distance проверка
-- [ ] Push-уведомления (Firebase FCM, transactional outbox)
-- [ ] In-app уведомления (Notification entity)
+- [ ] Push-уведомления (Firebase FCM, transactional outbox) — требует внешних credentials, отложено
+- [x] In-app уведомления (Notification entity, миграция V012). GET /api/v1/notifications/my, /unread-count, PATCH /{id}/read, POST /read-all. Триггерится из BookingService.updateStatus и BookingSchedulerService (CONFIRMED/REJECTED/CANCELLED/COMPLETED)
 - [x] Rate limiting — свой fixed-window лимитер на Redis (atomic Lua INCR+PEXPIRE), не Bucket4j (риск неверных Maven-координат без интернета). `RateLimitFilter` перед JwtAuthFilter, general 100/60с + строгий auth 10/60с на /api/v1/auth/**, по IP (X-Forwarded-For/remoteAddr), исключения — actuator/health, swagger, api-docs
 - [ ] Structured JSON логи (logback + logstash-encoder)
 - [ ] Audit log (таблица audit_log)

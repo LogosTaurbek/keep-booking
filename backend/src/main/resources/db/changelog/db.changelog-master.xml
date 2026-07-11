@@ -16,5 +16,6 @@
     <include file="db/changelog/migrations/V009__reviews.sql"/>
     <include file="db/changelog/migrations/V010__geo_search.sql"/>
     <include file="db/changelog/migrations/V011__search_history.sql"/>
+    <include file="db/changelog/migrations/V012__notifications.sql"/>
 
 </databaseChangeLog>

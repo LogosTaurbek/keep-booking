@@ -21,6 +21,8 @@ import com.keepbooking.booking.repository.BookingRepository;
 import com.keepbooking.common.dto.PageResponse;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.notification.model.NotificationType;
+import com.keepbooking.notification.service.NotificationService;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.model.RestaurantStatus;
 import com.keepbooking.restaurant.model.RestaurantTable;
@@ -41,6 +43,7 @@ public class BookingService {
     private final TableRepository tableRepository;
     private final UserRepository userRepository;
     private final IdempotencyService idempotencyService;
+    private final NotificationService notificationService;
 
     @Transactional
     public BookingDto create(Long userId, CreateBookingRequest request, String idempotencyKey) {
@@ -139,7 +142,24 @@ public class BookingService {
         }
 
         booking.setStatus(next);
-        return toDto(bookingRepository.save(booking));
+        Booking saved = bookingRepository.save(booking);
+        sendStatusNotification(saved, next);
+        return toDto(saved);
+    }
+
+    private void sendStatusNotification(Booking booking, BookingStatus status) {
+        String restaurantName = booking.getRestaurant().getName();
+        switch (status) {
+            case CONFIRMED -> notificationService.notifyBookingStatusChange(booking, NotificationType.BOOKING_CONFIRMED,
+                    "Booking confirmed", restaurantName + " confirmed your booking on " + booking.getBookingDate());
+            case REJECTED -> notificationService.notifyBookingStatusChange(booking, NotificationType.BOOKING_REJECTED,
+                    "Booking rejected", restaurantName + " rejected your booking on " + booking.getBookingDate());
+            case CANCELLED -> notificationService.notifyBookingStatusChange(booking, NotificationType.BOOKING_CANCELLED,
+                    "Booking cancelled", "Your booking at " + restaurantName + " on " + booking.getBookingDate() + " was cancelled");
+            case COMPLETED -> notificationService.notifyBookingStatusChange(booking, NotificationType.BOOKING_COMPLETED,
+                    "Visit completed", "Thanks for visiting " + restaurantName + "! Leave a review to share your experience");
+            default -> { /* PENDING / NO_SHOW: no notification */ }
+        }
     }
 
     @Transactional(readOnly = true)
