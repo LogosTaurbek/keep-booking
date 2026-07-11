@@ -18,6 +18,7 @@ import com.keepbooking.booking.dto.UpdateBookingStatusRequest;
 import com.keepbooking.booking.model.Booking;
 import com.keepbooking.booking.model.BookingStatus;
 import com.keepbooking.booking.repository.BookingRepository;
+import com.keepbooking.common.audit.AuditLogService;
 import com.keepbooking.common.dto.PageResponse;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
@@ -44,6 +45,7 @@ public class BookingService {
     private final UserRepository userRepository;
     private final IdempotencyService idempotencyService;
     private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public BookingDto create(Long userId, CreateBookingRequest request, String idempotencyKey) {
@@ -141,9 +143,12 @@ public class BookingService {
             booking.setCancelReason(request.getCancelReason());
         }
 
+        BookingStatus previous = booking.getStatus();
         booking.setStatus(next);
         Booking saved = bookingRepository.save(booking);
         sendStatusNotification(saved, next);
+        auditLogService.record(userId, "BOOKING_STATUS_CHANGED", "Booking", saved.getId(),
+                previous + " -> " + next);
         return toDto(saved);
     }
 
