@@ -27,6 +27,7 @@
 - Файловое хранилище — AWS SDK v2 S3-клиент с `endpointOverride` на MinIO (path-style access), а не MinIO-специфичный клиент — совместимо и с реальным S3 в проде. Bucket создаётся и получает публичную read-политику при старте (`FileStorageService.ensureBucketExists`, `@PostConstruct`)
 - `Restaurant.rating`/`reviewsCount` пересчитываются синхронно при создании отзыва (`ReviewService.recalculateRestaurantRating` — AVG/COUNT одним запросом), а не хранятся денормализованно без источника истины
 - Геопоиск — PostgreSQL `cube`/`earthdistance` (contrib-модули, как `btree_gist` для double-booking), не PostGIS: `earth_box(...) @>` как index-friendly предфильтр по кубу + точный `earth_distance(...) <=` для реального круга радиуса
+- Rate limiting — hand-rolled на Redis вместо Bucket4j (не было интернета проверить актуальные Maven-координаты/API 8.x). Fixed-window, atomic INCR+PEXPIRE через Lua-скрипт (аналогично IdempotencyService). `RateLimitFilter` регистрируется через `.addFilterBefore(jwtAuthFilter, ...)` СНАЧАЛА, затем `.addFilterBefore(rateLimitFilter, JwtAuthFilter.class)` — иначе Spring Security падает с "Filter class does not have a registered order" (нельзя ссылаться на custom-фильтр как якорь до его собственной регистрации)
 
 ---
 
@@ -118,7 +119,7 @@
 - [x] Карта / радиус — GET /api/v1/restaurants/nearby?lat=&lng=&radiusKm=, PostgreSQL cube+earthdistance extensions (миграция V010), earth_box index-friendly pre-filter + точная earth_distance проверка
 - [ ] Push-уведомления (Firebase FCM, transactional outbox)
 - [ ] In-app уведомления (Notification entity)
-- [ ] Rate limiting (Bucket4j + Redis)
+- [x] Rate limiting — свой fixed-window лимитер на Redis (atomic Lua INCR+PEXPIRE), не Bucket4j (риск неверных Maven-координат без интернета). `RateLimitFilter` перед JwtAuthFilter, general 100/60с + строгий auth 10/60с на /api/v1/auth/**, по IP (X-Forwarded-For/remoteAddr), исключения — actuator/health, swagger, api-docs
 - [ ] Structured JSON логи (logback + logstash-encoder)
 - [ ] Audit log (таблица audit_log)
 - [ ] Метрики (Micrometer → Prometheus → Grafana)

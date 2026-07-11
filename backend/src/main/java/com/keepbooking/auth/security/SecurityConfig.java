@@ -20,6 +20,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.keepbooking.common.config.AppProperties;
+import com.keepbooking.common.ratelimit.RateLimitFilter;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final CustomUserDetailsService userDetailsService;
     private final AppProperties appProperties;
 
@@ -61,6 +63,7 @@ public class SecurityConfig {
                 )
                 .userDetailsService(userDetailsService)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(rateLimitFilter, JwtAuthFilter.class)
                 .build();
     }
 

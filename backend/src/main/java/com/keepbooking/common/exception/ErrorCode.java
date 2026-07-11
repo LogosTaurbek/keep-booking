@@ -55,6 +55,9 @@ public enum ErrorCode {
     FILE_TYPE_NOT_ALLOWED("FILE_002", "File type is not allowed", HttpStatus.UNSUPPORTED_MEDIA_TYPE),
     FILE_UPLOAD_FAILED("FILE_003", "Failed to upload file", HttpStatus.INTERNAL_SERVER_ERROR),
 
+    // Rate limiting
+    RATE_LIMIT_EXCEEDED("RATE_001", "Too many requests, please try again later", HttpStatus.TOO_MANY_REQUESTS),
+
     // Generic
     VALIDATION_ERROR("VAL_001", "Validation failed", HttpStatus.BAD_REQUEST),
     NOT_FOUND("GEN_001", "Resource not found", HttpStatus.NOT_FOUND),

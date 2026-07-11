@@ -15,6 +15,7 @@ public class AppProperties {
     private Tokens tokens = new Tokens();
     private Booking booking = new Booking();
     private Storage storage = new Storage();
+    private RateLimit rateLimit = new RateLimit();
 
     @Data
     public static class Jwt {
@@ -49,5 +50,16 @@ public class AppProperties {
         private String accessKey;
         private String secretKey;
         private String bucket;
+    }
+
+    @Data
+    public static class RateLimit {
+        private boolean enabled = true;
+        /** General limit applied to all endpoints. */
+        private int generalLimit = 100;
+        private long generalWindowMs = 60_000;
+        /** Stricter limit for /api/v1/auth/** to slow down brute-force/credential-stuffing attempts. */
+        private int authLimit = 10;
+        private long authWindowMs = 60_000;
     }
 }

@@ -67,6 +67,12 @@ app:
     access-key: ${STORAGE_ACCESS_KEY:keepbooking}
     secret-key: ${STORAGE_SECRET_KEY:keepbooking123}
     bucket: ${STORAGE_BUCKET:keepbooking}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    general-limit: ${RATE_LIMIT_GENERAL:100}
+    general-window-ms: ${RATE_LIMIT_GENERAL_WINDOW_MS:60000}
+    auth-limit: ${RATE_LIMIT_AUTH:10}
+    auth-window-ms: ${RATE_LIMIT_AUTH_WINDOW_MS:60000}
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:4200,http://localhost:8081}
 
