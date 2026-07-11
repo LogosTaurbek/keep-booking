@@ -25,6 +25,7 @@
   2. Поиск по `bookings.idempotency_key` в БД при промахе кэша (рестарт Redis и т.п.)
   3. `UNIQUE` constraint на `idempotency_key` — финальная гарантия при гонке параллельных ретраев
 - Файловое хранилище — AWS SDK v2 S3-клиент с `endpointOverride` на MinIO (path-style access), а не MinIO-специфичный клиент — совместимо и с реальным S3 в проде. Bucket создаётся и получает публичную read-политику при старте (`FileStorageService.ensureBucketExists`, `@PostConstruct`)
+- `Restaurant.rating`/`reviewsCount` пересчитываются синхронно при создании отзыва (`ReviewService.recalculateRestaurantRating` — AVG/COUNT одним запросом), а не хранятся денормализованно без источника истины
 
 ---
 
@@ -110,7 +111,7 @@
 ### Этап 2
 
 - [x] Избранное (Favorite entity, миграция V008, GET/POST/DELETE /api/v1/favorites — идемпотентные add/remove, unique constraint (user_id, restaurant_id))
-- [ ] Отзывы (Review entity, только после COMPLETED-брони)
+- [x] Отзывы (Review entity, миграция V009, POST /api/v1/reviews + GET /api/v1/restaurants/{id}/reviews + GET /api/v1/reviews/my; только после COMPLETED-брони, 1 отзыв на бронь; пересчитывает Restaurant.rating/reviewsCount)
 - [ ] История (посещения, поиски)
 - [ ] Поиск с фильтрами (название, кухня, рейтинг, радиус)
 - [ ] Карта (GET рестораны в bbox/радиусе)

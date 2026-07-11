@@ -39,6 +39,10 @@ public enum ErrorCode {
     // Restaurant photos
     RESTAURANT_PHOTO_NOT_FOUND("PHOTO_001", "Restaurant photo not found", HttpStatus.NOT_FOUND),
 
+    // Reviews
+    REVIEW_ALREADY_EXISTS("REVIEW_001", "A review already exists for this booking", HttpStatus.CONFLICT),
+    REVIEW_BOOKING_NOT_COMPLETED("REVIEW_002", "Booking must be completed before leaving a review", HttpStatus.UNPROCESSABLE_ENTITY),
+
     // Booking
     BOOKING_NOT_FOUND("BOOK_001", "Booking not found", HttpStatus.NOT_FOUND),
     BOOKING_INVALID_TIME("BOOK_002", "Booking time is invalid or in the past", HttpStatus.UNPROCESSABLE_ENTITY),
