@@ -10,9 +10,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -53,6 +55,22 @@ public class GlobalExceptionHandler {
         ProblemDetail body = ProblemDetail.of(ErrorCode.VALIDATION_ERROR,
                 ErrorCode.VALIDATION_ERROR.getDefaultMessage(), request.getRequestURI());
         body.setErrors(violations);
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ProblemDetail> handleMissingParam(MissingServletRequestParameterException ex, HttpServletRequest request) {
+        ProblemDetail body = ProblemDetail.of(ErrorCode.VALIDATION_ERROR,
+                ErrorCode.VALIDATION_ERROR.getDefaultMessage(), request.getRequestURI());
+        body.setErrors(List.of(new ProblemDetail.FieldViolation(ex.getParameterName(), "Required parameter is missing")));
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ProblemDetail> handleTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        ProblemDetail body = ProblemDetail.of(ErrorCode.VALIDATION_ERROR,
+                ErrorCode.VALIDATION_ERROR.getDefaultMessage(), request.getRequestURI());
+        body.setErrors(List.of(new ProblemDetail.FieldViolation(ex.getName(), "Invalid value: " + ex.getValue())));
         return ResponseEntity.badRequest().body(body);
     }
 

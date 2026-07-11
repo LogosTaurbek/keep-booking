@@ -1,5 +1,6 @@
 package com.keepbooking.restaurant.controller;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.data.domain.PageRequest;
@@ -36,14 +37,29 @@ public class RestaurantController {
 
     private final RestaurantService restaurantService;
 
-    @Operation(summary = "Get active restaurants (public)")
+    @Operation(summary = "Search active restaurants (public): name, cuisine, city, min rating")
     @GetMapping
     public ResponseEntity<PageResponse<RestaurantDto>> list(
             @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String cuisine,
+            @RequestParam(required = false) BigDecimal minRating,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         var pageable = PageRequest.of(page, Math.min(size, 100), Sort.by("rating").descending());
-        return ResponseEntity.ok(restaurantService.listActive(cityId, pageable));
+        return ResponseEntity.ok(restaurantService.search(cityId, name, cuisine, minRating, pageable));
+    }
+
+    @Operation(summary = "Find restaurants within a radius (public, for map view)")
+    @GetMapping("/nearby")
+    public ResponseEntity<PageResponse<RestaurantDto>> nearby(
+            @RequestParam double lat,
+            @RequestParam double lng,
+            @RequestParam(defaultValue = "5") double radiusKm,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var pageable = PageRequest.of(page, Math.min(size, 100));
+        return ResponseEntity.ok(restaurantService.findNearby(lat, lng, radiusKm, pageable));
     }
 
     @Operation(summary = "Get restaurant by ID (public)")

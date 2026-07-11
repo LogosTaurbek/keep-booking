@@ -14,5 +14,6 @@
     <include file="db/changelog/migrations/V007__restaurant_photos.sql"/>
     <include file="db/changelog/migrations/V008__favorites.sql"/>
     <include file="db/changelog/migrations/V009__reviews.sql"/>
+    <include file="db/changelog/migrations/V010__geo_search.sql"/>
 
 </databaseChangeLog>

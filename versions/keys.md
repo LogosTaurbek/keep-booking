@@ -26,6 +26,7 @@
   3. `UNIQUE` constraint на `idempotency_key` — финальная гарантия при гонке параллельных ретраев
 - Файловое хранилище — AWS SDK v2 S3-клиент с `endpointOverride` на MinIO (path-style access), а не MinIO-специфичный клиент — совместимо и с реальным S3 в проде. Bucket создаётся и получает публичную read-политику при старте (`FileStorageService.ensureBucketExists`, `@PostConstruct`)
 - `Restaurant.rating`/`reviewsCount` пересчитываются синхронно при создании отзыва (`ReviewService.recalculateRestaurantRating` — AVG/COUNT одним запросом), а не хранятся денормализованно без источника истины
+- Геопоиск — PostgreSQL `cube`/`earthdistance` (contrib-модули, как `btree_gist` для double-booking), не PostGIS: `earth_box(...) @>` как index-friendly предфильтр по кубу + точный `earth_distance(...) <=` для реального круга радиуса
 
 ---
 
@@ -113,8 +114,8 @@
 - [x] Избранное (Favorite entity, миграция V008, GET/POST/DELETE /api/v1/favorites — идемпотентные add/remove, unique constraint (user_id, restaurant_id))
 - [x] Отзывы (Review entity, миграция V009, POST /api/v1/reviews + GET /api/v1/restaurants/{id}/reviews + GET /api/v1/reviews/my; только после COMPLETED-брони, 1 отзыв на бронь; пересчитывает Restaurant.rating/reviewsCount)
 - [ ] История (посещения, поиски)
-- [ ] Поиск с фильтрами (название, кухня, рейтинг, радиус)
-- [ ] Карта (GET рестораны в bbox/радиусе)
+- [x] Поиск с фильтрами (название, кухня, рейтинг) — GET /api/v1/restaurants?name=&cuisine=&minRating=&cityId=, через Specification API (JpaSpecificationExecutor)
+- [x] Карта / радиус — GET /api/v1/restaurants/nearby?lat=&lng=&radiusKm=, PostgreSQL cube+earthdistance extensions (миграция V010), earth_box index-friendly pre-filter + точная earth_distance проверка
 - [ ] Push-уведомления (Firebase FCM, transactional outbox)
 - [ ] In-app уведомления (Notification entity)
 - [ ] Rate limiting (Bucket4j + Redis)

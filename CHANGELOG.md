@@ -7,6 +7,11 @@
 ### Added — Этап 2
 - Избранное — новый модуль `favorite`: `Favorite` entity (миграция V008, unique constraint `user_id, restaurant_id`), `GET/POST/DELETE /api/v1/favorites`, add/remove идемпотентны, список отдаёт `RestaurantDto` (JOIN FETCH, без N+1)
 - Отзывы — новый модуль `review`: `Review` entity (миграция V009), `POST /api/v1/reviews` (только после `COMPLETED`-брони, 1 отзыв на бронь), `GET /api/v1/restaurants/{id}/reviews` (публично), `GET /api/v1/reviews/my`. Пересчитывает `Restaurant.rating`/`reviewsCount` синхронно при создании отзыва
+- Поиск ресторанов с фильтрами — `GET /api/v1/restaurants?name=&cuisine=&minRating=&cityId=`, композиция через `RestaurantSpecifications` (Spring Data JPA Specification API)
+- Геопоиск/карта — `GET /api/v1/restaurants/nearby?lat=&lng=&radiusKm=`, PostgreSQL `cube`+`earthdistance` extensions (миграция V010)
+
+### Fixed
+- `MissingServletRequestParameterException` и `MethodArgumentTypeMismatchException` не обрабатывались `GlobalExceptionHandler` — отсутствующий или некорректный query-параметр падал в 500 вместо 400. Фиксит все query-параметры по проекту, не только `/restaurants/nearby`
 
 ## [Unreleased] — 2026-07-10 — Этап 1 (MVP)
 

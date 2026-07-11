@@ -1,5 +1,6 @@
 package com.keepbooking.restaurant.service;
 
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -7,6 +8,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,9 +23,9 @@ import com.keepbooking.restaurant.dto.CreateRestaurantRequest;
 import com.keepbooking.restaurant.dto.RestaurantDto;
 import com.keepbooking.restaurant.model.Company;
 import com.keepbooking.restaurant.model.Restaurant;
-import com.keepbooking.restaurant.model.RestaurantStatus;
 import com.keepbooking.restaurant.repository.CompanyRepository;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
+import com.keepbooking.restaurant.repository.RestaurantSpecifications;
 
 import lombok.RequiredArgsConstructor;
 
@@ -74,10 +76,22 @@ public class RestaurantService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<RestaurantDto> listActive(Long cityId, Pageable pageable) {
-        Page<Restaurant> page = cityId != null
-                ? restaurantRepository.findByCityIdAndStatus(cityId, RestaurantStatus.ACTIVE, pageable)
-                : restaurantRepository.findByStatus(RestaurantStatus.ACTIVE, pageable);
+    public PageResponse<RestaurantDto> search(Long cityId, String name, String cuisineSlug,
+                                               BigDecimal minRating, Pageable pageable) {
+        Specification<Restaurant> spec = Specification
+                .allOf(RestaurantSpecifications.isActive())
+                .and(RestaurantSpecifications.hasCityId(cityId))
+                .and(RestaurantSpecifications.nameContains(name))
+                .and(RestaurantSpecifications.hasCuisineSlug(cuisineSlug))
+                .and(RestaurantSpecifications.hasMinRating(minRating));
+
+        Page<Restaurant> page = restaurantRepository.findAll(spec, pageable);
+        return PageResponse.of(page.map(this::toDto));
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<RestaurantDto> findNearby(double lat, double lng, double radiusKm, Pageable pageable) {
+        Page<Restaurant> page = restaurantRepository.findNearby(lat, lng, radiusKm * 1000, pageable);
         return PageResponse.of(page.map(this::toDto));
     }
 
