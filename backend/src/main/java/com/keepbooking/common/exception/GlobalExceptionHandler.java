@@ -83,12 +83,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ProblemDetail> handleDataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
-        String msg = ex.getMessage() != null && ex.getMessage().contains("no_double_booking")
-                ? "Table is not available for the requested time slot"
-                : "Data integrity violation";
+        // Only the double-booking exclusion constraint maps to TABLE_NOT_AVAILABLE — any other
+        // constraint violation (e.g. a duplicate refresh/device token) is a generic conflict,
+        // not a booking-specific one, and must not be misreported as "table not available".
+        boolean isDoubleBooking = ex.getMessage() != null && ex.getMessage().contains("no_double_booking");
+        ErrorCode code = isDoubleBooking ? ErrorCode.TABLE_NOT_AVAILABLE : ErrorCode.DATA_CONFLICT;
+        String msg = isDoubleBooking ? "Table is not available for the requested time slot" : code.getDefaultMessage();
         return ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(ProblemDetail.of(ErrorCode.TABLE_NOT_AVAILABLE, msg, request.getRequestURI()));
+                .status(code.getHttpStatus())
+                .body(ProblemDetail.of(code, msg, request.getRequestURI()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

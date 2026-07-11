@@ -4,6 +4,16 @@
 
 ## [Unreleased] — 2026-07-11
 
+### Added — Push-уведомления (Firebase FCM)
+- `com.google.firebase:firebase-admin:9.4.3` — версия не проверена вживую на Maven Central (нет доступа в интернет из песочницы, как ранее с Bucket4j), стоит перепроверить перед `./gradlew build` с реальным интернетом
+- `device_tokens` (миграция V014): один или несколько FCM-токенов на пользователя (`user_id`, `token` UNIQUE, `platform` ANDROID/IOS/WEB)
+- `POST /api/v1/device-tokens` (register, идемпотентно — если токен уже привязан к другому юзеру, переattach-ится, как при повторном логине на том же устройстве другим аккаунтом), `DELETE /api/v1/device-tokens/{token}` (unregister, например на logout)
+- `FirebaseConfig` регистрирует `FirebaseMessaging`-бин только при `app.firebase.enabled=true` (`FIREBASE_ENABLED` / `FIREBASE_CREDENTIALS_PATH` env). По умолчанию выключено — большинство окружений (локальная разработка, CI) не имеют service account key
+- `PushNotificationService` принимает `Optional<FirebaseMessaging>` и молча деградирует в no-op, если бин не создан — остальной notification-модуль (in-app уведомления) работает без изменений вне зависимости от наличия Firebase credentials
+- Подключено к `NotificationService.notifyBookingStatusChange` — push уходит с тем же title/message, что и in-app уведомление, при переходах брони в `CONFIRMED`/`REJECTED`/`CANCELLED`/`COMPLETED`
+- `sendEachForMulticast` разом на все токены пользователя; при ошибке `MessagingErrorCode.UNREGISTERED` для конкретного токена (приложение удалено/токен истёк) — токен удаляется из `device_tokens`, остальные токены партии не страдают
+- Ошибки отправки (`FirebaseMessagingException`) логируются и проглатываются — не откатывают транзакцию сохранения in-app уведомления
+
 ### Added — OpenTelemetry-трейсинг
 - `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp`, экспорт по OTLP/HTTP (`management.otlp.tracing.endpoint`, по умолчанию `http://localhost:4318/v1/traces`), sampling 100% по умолчанию, оба параметра переопределяются через env
 - В `docker-compose.yml` добавлен сервис `jaeger` (all-in-one) — UI на :16686, OTLP receiver на :4318

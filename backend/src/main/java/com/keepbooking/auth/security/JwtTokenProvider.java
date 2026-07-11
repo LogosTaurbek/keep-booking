@@ -2,6 +2,7 @@ package com.keepbooking.auth.security;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.UUID;
 
 import javax.crypto.SecretKey;
 
@@ -43,7 +44,11 @@ public class JwtTokenProvider {
     }
 
     private String buildToken(String subject, long expirationMs) {
+        // iat/exp are serialized with second precision (JWT NumericDate) — without a random jti,
+        // two tokens issued to the same subject within the same second are byte-identical, which
+        // collides with the UNIQUE constraint on refresh_tokens.token_hash (same string -> same hash).
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(subject)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expirationMs))

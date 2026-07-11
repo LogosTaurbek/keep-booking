@@ -65,7 +65,8 @@ public enum ErrorCode {
     // Generic
     VALIDATION_ERROR("VAL_001", "Validation failed", HttpStatus.BAD_REQUEST),
     NOT_FOUND("GEN_001", "Resource not found", HttpStatus.NOT_FOUND),
-    INTERNAL_ERROR("GEN_002", "Internal server error", HttpStatus.INTERNAL_SERVER_ERROR);
+    INTERNAL_ERROR("GEN_002", "Internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
+    DATA_CONFLICT("GEN_003", "A conflicting record already exists", HttpStatus.CONFLICT);
 
     private final String code;
     private final String defaultMessage;

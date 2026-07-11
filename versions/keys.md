@@ -13,7 +13,7 @@
 - Статусы сущностей — VARCHAR + CHECK constraint (не PostgreSQL ENUM)
 - Ошибки — RFC 7807 Problem Details, коды в `ErrorCode` enum
 - Пагинация — единый `PageResponse<T>`
-- JWT — access 15 мин + refresh в БД (хеш SHA-256), ротация при обновлении
+- JWT — access 15 мин + refresh в БД (хеш SHA-256), ротация при обновлении. `iat`/`exp` сериализуются с точностью до секунды — токен обязательно содержит случайный `jti`, иначе два токена одному юзеру в одну секунду (register сразу за которым login, параллельный логин) совпадают побайтово и бьются об `UNIQUE(token_hash)` (см. CHANGELOG, найдено вживую при smoke-тесте push-уведомлений)
 - Защита от double-booking — ДВОЙНАЯ гарантия:
   1. JPQL-проверка в `BookingService.existsConflictingBooking`
   2. `exclusion constraint` (btree_gist + tsrange) в миграции V004
@@ -145,7 +145,7 @@
 - [x] История (посещения, поиски): GET /api/v1/bookings/my?status= (переиспользует bookings, без нового модуля для визитов) + новый модуль `history` — SearchHistory (миграция V011), GET /api/v1/search-history/my; логируется только для авторизованных при непустых фильтрах
 - [x] Поиск с фильтрами (название, кухня, рейтинг) — GET /api/v1/restaurants?name=&cuisine=&minRating=&cityId=, через Specification API (JpaSpecificationExecutor)
 - [x] Карта / радиус — GET /api/v1/restaurants/nearby?lat=&lng=&radiusKm=, PostgreSQL cube+earthdistance extensions (миграция V010), earth_box index-friendly pre-filter + точная earth_distance проверка
-- [ ] Push-уведомления (Firebase FCM, transactional outbox) — требует внешних credentials, отложено
+- [x] Push-уведомления (Firebase FCM) — `PushNotificationService` + `DeviceToken` (миграция V014), `POST/DELETE /api/v1/device-tokens`. `FirebaseConfig` создаёт `FirebaseMessaging`-бин только при `app.firebase.enabled=true` (нет по умолчанию — большинство окружений, включая CI, не имеют service account key); `PushNotificationService` принимает `Optional<FirebaseMessaging>` и молча деградирует в no-op, если бин отсутствует — остальной notification-модуль работает как раньше. Триггерится из `NotificationService.notifyBookingStatusChange` тем же title/message, что уходит в in-app уведомление. `sendEachForMulticast` на все токены юзера разом; при `MessagingErrorCode.UNREGISTERED` для конкретного токена — удаляется из `device_tokens` (устройство разлогинилось/приложение удалено)
 - [x] In-app уведомления (Notification entity, миграция V012). GET /api/v1/notifications/my, /unread-count, PATCH /{id}/read, POST /read-all. Триггерится из BookingService.updateStatus и BookingSchedulerService (CONFIRMED/REJECTED/CANCELLED/COMPLETED)
 - [x] Rate limiting — свой fixed-window лимитер на Redis (atomic Lua INCR+PEXPIRE), не Bucket4j (риск неверных Maven-координат без интернета). `RateLimitFilter` перед JwtAuthFilter, general 100/60с + строгий auth 10/60с на /api/v1/auth/**, по IP (X-Forwarded-For/remoteAddr), исключения — actuator/health, swagger, api-docs
 - [x] Structured JSON логи — logback-spring.xml, `net.logstash.logback:logstash-logback-encoder`. JSON везде кроме local-профиля (там читаемый паттерн). `RequestIdFilter` кладёт correlation ID в MDC (X-Request-Id из заголовка или генерируется), попадает в каждую JSON-строку лога
