@@ -12,5 +12,6 @@
     <include file="db/changelog/migrations/V005__auth_tokens.sql"/>
     <include file="db/changelog/migrations/V006__menu.sql"/>
     <include file="db/changelog/migrations/V007__restaurant_photos.sql"/>
+    <include file="db/changelog/migrations/V008__favorites.sql"/>
 
 </databaseChangeLog>

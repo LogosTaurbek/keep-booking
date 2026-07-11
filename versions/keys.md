@@ -109,7 +109,7 @@
 
 ### Этап 2
 
-- [ ] Избранное (Favorite entity, GET/POST/DELETE /api/v1/favorites)
+- [x] Избранное (Favorite entity, миграция V008, GET/POST/DELETE /api/v1/favorites — идемпотентные add/remove, unique constraint (user_id, restaurant_id))
 - [ ] Отзывы (Review entity, только после COMPLETED-брони)
 - [ ] История (посещения, поиски)
 - [ ] Поиск с фильтрами (название, кухня, рейтинг, радиус)
@@ -117,7 +117,6 @@
 - [ ] Push-уведомления (Firebase FCM, transactional outbox)
 - [ ] In-app уведомления (Notification entity)
 - [ ] Rate limiting (Bucket4j + Redis)
-- [ ] Кэш справочников в Redis (@Cacheable)
 - [ ] Structured JSON логи (logback + logstash-encoder)
 - [ ] Audit log (таблица audit_log)
 - [ ] Метрики (Micrometer → Prometheus → Grafana)

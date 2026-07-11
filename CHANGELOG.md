@@ -1,8 +1,13 @@
 # Changelog
 
-Формат по мотивам [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/). Версий/тегов пока нет — проект в разработке Этапа 1 (MVP), записи сгруппированы по дате.
+Формат по мотивам [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/). Версий/тегов пока нет — записи сгруппированы по дате.
 
-## [Unreleased] — 2026-07-10
+## [Unreleased] — 2026-07-11
+
+### Added — Favorites (Этап 2)
+- Новый модуль `favorite` — `Favorite` entity (миграция V008, unique constraint `user_id, restaurant_id`), `GET/POST/DELETE /api/v1/favorites`, add/remove идемпотентны, список отдаёт `RestaurantDto` (JOIN FETCH, без N+1)
+
+## [Unreleased] — 2026-07-10 — Этап 1 (MVP)
 
 ### Added — Инфраструктура
 - Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle-wrapper.jar`, Gradle 9.0.0)
