@@ -4,6 +4,11 @@
 
 ## [Unreleased] — 2026-07-11
 
+### Added — Тесты CompanyService/TableService
+- `CompanyServiceTest` (9 unit-тестов) — create, getById owner-check, setBlocked (true/false), getAllCompanies (paged)
+- `TableServiceTest` (13 unit-тестов) — owner-check CRUD + `batchUpdatePositions` (hall не найден/не владелец, table id не в этом зале → `TABLE_NOT_FOUND`, обновляются только position-поля)
+- Итого 98 unit-тестов реально прогнаны и зелёные (+ 1 integration-тест подтверждён в CI)
+
 ### Added — Суперадмин панель
 - Новый модуль `admin`: `GET/PATCH /api/v1/admin/users` (список, block/unblock), `GET/PATCH /api/v1/admin/companies` (список, block/unblock), `GET/PATCH /api/v1/admin/restaurants` (список по статусу, approve/reject с причиной, block), `DELETE /api/v1/admin/reviews/{id}`, `GET /api/v1/admin/stats`
 - Все эндпоинты только для `SUPER_ADMIN`, все мутирующие действия пишутся в `audit_log`
