@@ -21,6 +21,8 @@ logs/
 .env
 *.env.local
 application-secret.yml
+firebase-service-account*.json
+serviceAccountKey.json
 
 # OS
 .DS_Store

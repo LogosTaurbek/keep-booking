@@ -1,5 +1,7 @@
 package com.keepbooking.notification.service;
 
+import java.util.Map;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+    private final PushNotificationService pushNotificationService;
 
     @Transactional
     public void notifyBookingStatusChange(Booking booking, NotificationType type, String title, String message) {
@@ -32,6 +35,9 @@ public class NotificationService {
                 .booking(booking)
                 .build();
         notificationRepository.save(notification);
+
+        pushNotificationService.send(booking.getUser().getId(), title, message,
+                Map.of("type", type.name(), "bookingId", booking.getId().toString()));
     }
 
     @Transactional(readOnly = true)

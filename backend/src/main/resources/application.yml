@@ -67,6 +67,9 @@ app:
     access-key: ${STORAGE_ACCESS_KEY:keepbooking}
     secret-key: ${STORAGE_SECRET_KEY:keepbooking123}
     bucket: ${STORAGE_BUCKET:keepbooking}
+  firebase:
+    enabled: ${FIREBASE_ENABLED:false}
+    credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     general-limit: ${RATE_LIMIT_GENERAL:100}

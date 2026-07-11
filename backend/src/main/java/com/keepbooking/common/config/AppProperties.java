@@ -16,6 +16,7 @@ public class AppProperties {
     private Booking booking = new Booking();
     private Storage storage = new Storage();
     private RateLimit rateLimit = new RateLimit();
+    private Firebase firebase = new Firebase();
 
     @Data
     public static class Jwt {
@@ -61,5 +62,12 @@ public class AppProperties {
         /** Stricter limit for /api/v1/auth/** to slow down brute-force/credential-stuffing attempts. */
         private int authLimit = 10;
         private long authWindowMs = 60_000;
+    }
+
+    @Data
+    public static class Firebase {
+        /** Off by default — most environments (local dev, CI) don't have a service account key. */
+        private boolean enabled = false;
+        private String credentialsPath;
     }
 }

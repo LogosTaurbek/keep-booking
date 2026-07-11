@@ -3,6 +3,9 @@ package com.keepbooking.notification.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -31,6 +34,9 @@ class NotificationServiceTest {
     @Mock
     private NotificationRepository notificationRepository;
 
+    @Mock
+    private PushNotificationService pushNotificationService;
+
     private NotificationService notificationService;
 
     private static final Long USER_ID = 1L;
@@ -39,7 +45,7 @@ class NotificationServiceTest {
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationService(notificationRepository);
+        notificationService = new NotificationService(notificationRepository, pushNotificationService);
     }
 
     private User user(Long id) {
@@ -60,6 +66,7 @@ class NotificationServiceTest {
         notificationService.notifyBookingStatusChange(booking, NotificationType.BOOKING_CONFIRMED, "Confirmed", "Your booking is confirmed");
 
         verify(notificationRepository).save(any(Notification.class));
+        verify(pushNotificationService).send(eq(USER_ID), anyString(), anyString(), anyMap());
     }
 
     @Test

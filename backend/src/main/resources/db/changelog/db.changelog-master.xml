@@ -18,5 +18,6 @@
     <include file="db/changelog/migrations/V011__search_history.sql"/>
     <include file="db/changelog/migrations/V012__notifications.sql"/>
     <include file="db/changelog/migrations/V013__audit_log.sql"/>
+    <include file="db/changelog/migrations/V014__device_tokens.sql"/>
 
 </databaseChangeLog>
