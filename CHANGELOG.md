@@ -4,6 +4,13 @@
 
 ## [Unreleased] — 2026-07-11
 
+### Added — OpenTelemetry-трейсинг
+- `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp`, экспорт по OTLP/HTTP (`management.otlp.tracing.endpoint`, по умолчанию `http://localhost:4318/v1/traces`), sampling 100% по умолчанию, оба параметра переопределяются через env
+- В `docker-compose.yml` добавлен сервис `jaeger` (all-in-one) — UI на :16686, OTLP receiver на :4318
+- HTTP-запросы, Spring Security filter chain и `@Scheduled`-задачи `BookingSchedulerService` трассируются автоматически из коробки
+- traceId/spanId из MDC micrometer-tracing добавлены в JSON-логи (LogstashEncoder `includeMdcKeyName`) и в консольный паттерн local-профиля — логи и трейсы коррелируются по requestId/traceId/spanId
+- Проверено вживую: docker-compose up + bootRun + curl → трейсы видны в Jaeger UI и через `/api/services`, `/api/traces`; traceId/spanId подтверждены в JSON-логах
+
 ### Fixed
 - `BookingDto` не имел no-args конструктора (`@Data @Builder` без `@NoArgsConstructor`), из-за чего `IdempotencyService.get()` никогда не мог десериализовать закэшированный ответ из Redis — каждый cache hit тихо трактовался как cache miss (перехватывалось и логировалось как warning). Redis-кэш идемпотентности не работал с момента внедрения; спасал только DB-фоллбэк по `idempotency_key`, поэтому баг не проявлялся в ручном/curl-тестировании. Найдено при написании `IdempotencyServiceTest`. Исправлено добавлением `@NoArgsConstructor @AllArgsConstructor`
 

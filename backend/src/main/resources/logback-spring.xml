@@ -2,11 +2,11 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <!-- Local dev: human-readable console output -->
+    <!-- Local dev: human-readable console output, with traceId/spanId (populated by micrometer-tracing) for correlating with Jaeger -->
     <springProfile name="local">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
-                <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+                <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] [%X{requestId:-},%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n</pattern>
             </encoder>
         </appender>
     </springProfile>
@@ -16,6 +16,8 @@
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder class="net.logstash.logback.encoder.LogstashEncoder">
                 <includeMdcKeyName>requestId</includeMdcKeyName>
+                <includeMdcKeyName>traceId</includeMdcKeyName>
+                <includeMdcKeyName>spanId</includeMdcKeyName>
                 <customFields>{"service":"keep-booking"}</customFields>
             </encoder>
         </appender>
