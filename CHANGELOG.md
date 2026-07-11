@@ -4,6 +4,11 @@
 
 ## [Unreleased] — 2026-07-11
 
+### Added — Тесты MenuItemService/RestaurantPhotoService
+- `MenuItemServiceTest` (9 unit-тестов) — owner-check CRUD, дефолт position=0, частичный update
+- `RestaurantPhotoServiceTest` (7 unit-тестов) — owner-check, авто-инкремент position, delete проверяет принадлежность фото указанному restaurantId (не только существование), удаление файла из storage
+- Итого 114 unit-тестов реально прогнаны и зелёные (+ 1 integration-тест подтверждён в CI) — весь owner-check CRUD restaurant-модуля (Hall/Table/MenuItem/RestaurantPhoto) теперь покрыт тестами
+
 ### Added — Тесты CompanyService/TableService
 - `CompanyServiceTest` (9 unit-тестов) — create, getById owner-check, setBlocked (true/false), getAllCompanies (paged)
 - `TableServiceTest` (13 unit-тестов) — owner-check CRUD + `batchUpdatePositions` (hall не найден/не владелец, table id не в этом зале → `TABLE_NOT_FOUND`, обновляются только position-поля)
