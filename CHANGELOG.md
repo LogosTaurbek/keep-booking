@@ -4,6 +4,11 @@
 
 ## [Unreleased] — 2026-07-11
 
+### Fixed — коллизия refresh-токенов при login/register в одну секунду
+- `JwtTokenProvider.buildToken()` строил `iat`/`exp` из `Date` без `jti` — JWT-спека сериализует эти поля с точностью до секунды, поэтому `generateRefreshToken(email)` был чистой функцией от `(email, текущая секунда, secret)`. Два токена одному пользователю в одну и ту же секунду (например `register`, сразу за которым `login`, или два параллельных логина) получались побайтово идентичными → одинаковый SHA-256-хэш → второй `INSERT` в `refresh_tokens` бился об `UNIQUE(token_hash)` → `DataIntegrityViolationException`. Найдено вживую при smoke-тесте push-уведомлений (register сразу за которым login). Исправлено добавлением случайного `jti` (JWT ID, RFC 7519 §4.1.7) в каждый токен
+- `GlobalExceptionHandler.handleDataIntegrity()` слепо мапил любое `DataIntegrityViolationException` на бронирования-специфичный `TABLE_002/TABLE_NOT_AVAILABLE` — коллизия refresh-токена возвращала абсурдный "стол недоступен" на попытку логина. Добавлен честный generic-код `DATA_CONFLICT` (`GEN_003`) как fallback; кейс `no_double_booking` по-прежнему маппится на `TABLE_NOT_AVAILABLE`
+- Проверено вживую: register сразу за которым login (та же секунда) и 2 параллельных логина одному юзеру — оба сценария теперь `200 OK` вместо `409 TABLE_002`
+
 ### Added — Push-уведомления (Firebase FCM)
 - `com.google.firebase:firebase-admin:9.4.3` — версия не проверена вживую на Maven Central (нет доступа в интернет из песочницы, как ранее с Bucket4j), стоит перепроверить перед `./gradlew build` с реальным интернетом
 - `device_tokens` (миграция V014): один или несколько FCM-токенов на пользователя (`user_id`, `token` UNIQUE, `platform` ANDROID/IOS/WEB)

@@ -1,2 +1,6 @@
 # Secrets
 prompt/*.json
+
+# IDE
+.idea/
+*.iml
