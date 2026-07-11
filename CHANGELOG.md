@@ -9,6 +9,12 @@
 - Все эндпоинты только для `SUPER_ADMIN`, все мутирующие действия пишутся в `audit_log`
 - Реализовано расширением существующих `UserService`/`CompanyService`/`RestaurantService`/`ReviewService`, а не отдельным дублирующим слоем логики
 
+### Added — Тесты favorites/reviews/restaurant CRUD
+- `FavoriteServiceTest` (6 unit-тестов) — идемпотентность add/remove
+- `ReviewServiceTest` (7 unit-тестов) — бизнес-правило "только после COMPLETED, 1 отзыв на бронь", пересчёт rating/reviewsCount при создании и удалении
+- `HallServiceTest` (9 unit-тестов) — паттерн owner-check, общий для Hall/Table/MenuItem/RestaurantPhoto
+- Итого 76 unit-тестов реально прогнаны и зелёные
+
 ### Added — Тесты авторизации и доступности
 - `AuthServiceTest` (16 unit-тестов) — регистрация, login, refresh-ротация, verify-email, forgot/reset/change password. Реальный `JwtTokenProvider`, не мок
 - `AvailabilityServiceTest` (9 unit-тестов) — все проверки доступности столиков (статус ресторана, время, график работы, фильтрация занятых)
