@@ -35,6 +35,7 @@ import com.keepbooking.restaurant.repository.TableRepository;
 import com.keepbooking.restaurant.service.WorkingHoursResolver;
 import com.keepbooking.user.model.User;
 import com.keepbooking.user.repository.UserRepository;
+import com.keepbooking.waitlist.service.WaitlistService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -51,6 +52,7 @@ public class BookingService {
     private final AuditLogService auditLogService;
     private final MeterRegistry meterRegistry;
     private final WorkingHoursResolver workingHoursResolver;
+    private final WaitlistService waitlistService;
 
     @Transactional
     public BookingDto create(Long userId, CreateBookingRequest request, String idempotencyKey) {
@@ -159,6 +161,9 @@ public class BookingService {
         booking.setStatus(next);
         Booking saved = bookingRepository.save(booking);
         sendStatusNotification(saved, next);
+        if (next == BookingStatus.CANCELLED || next == BookingStatus.REJECTED) {
+            waitlistService.notifyTableFreed(saved);
+        }
         auditLogService.record(userId, "BOOKING_STATUS_CHANGED", "Booking", saved.getId(),
                 previous + " -> " + next);
         meterRegistry.counter("bookings.status.transitions.total", "status", next.name(), "trigger", "manual").increment();

@@ -59,6 +59,9 @@ public enum ErrorCode {
     // Notifications
     NOTIFICATION_NOT_FOUND("NOTIF_001", "Notification not found", HttpStatus.NOT_FOUND),
 
+    // Waitlist
+    WAITLIST_ENTRY_NOT_FOUND("WAIT_001", "Waitlist entry not found", HttpStatus.NOT_FOUND),
+
     // Rate limiting
     RATE_LIMIT_EXCEEDED("RATE_001", "Too many requests, please try again later", HttpStatus.TOO_MANY_REQUESTS),
 

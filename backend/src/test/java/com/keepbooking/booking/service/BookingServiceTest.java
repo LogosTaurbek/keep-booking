@@ -39,6 +39,7 @@ import com.keepbooking.restaurant.repository.TableRepository;
 import com.keepbooking.restaurant.service.WorkingHoursResolver;
 import com.keepbooking.user.model.User;
 import com.keepbooking.user.repository.UserRepository;
+import com.keepbooking.waitlist.service.WaitlistService;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -66,6 +67,8 @@ class BookingServiceTest {
     private AuditLogService auditLogService;
     @Mock
     private WorkingHoursResolver workingHoursResolver;
+    @Mock
+    private WaitlistService waitlistService;
 
     private BookingService bookingService;
 
@@ -76,7 +79,7 @@ class BookingServiceTest {
     void setUp() {
         bookingService = new BookingService(bookingRepository, restaurantRepository, tableRepository,
                 userRepository, idempotencyService, notificationService, auditLogService, new SimpleMeterRegistry(),
-                workingHoursResolver);
+                workingHoursResolver, waitlistService);
         // Most tests aren't about opening hours - default to "always open" and let the
         // dedicated test below override this to exercise the BOOKING_RESTAURANT_CLOSED path.
         lenient().when(workingHoursResolver.isOpenAt(any(), any(), any(), any())).thenReturn(true);
@@ -307,6 +310,7 @@ class BookingServiceTest {
 
         assertThat(dto.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
         assertThat(booking.getConfirmedBy()).isEqualTo(manager);
+        verify(waitlistService, never()).notifyTableFreed(any());
     }
 
     @Test
@@ -326,5 +330,6 @@ class BookingServiceTest {
         assertThat(dto.getStatus()).isEqualTo(BookingStatus.CANCELLED);
         assertThat(booking.getCancelledBy()).isEqualTo(user);
         assertThat(booking.getCancelReason()).isEqualTo("changed my mind");
+        verify(waitlistService).notifyTableFreed(booking);
     }
 }

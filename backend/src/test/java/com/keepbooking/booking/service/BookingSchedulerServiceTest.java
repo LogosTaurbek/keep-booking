@@ -28,6 +28,7 @@ import com.keepbooking.notification.model.NotificationType;
 import com.keepbooking.notification.service.NotificationService;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.user.model.User;
+import com.keepbooking.waitlist.service.WaitlistService;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -40,6 +41,8 @@ class BookingSchedulerServiceTest {
     private NotificationService notificationService;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private WaitlistService waitlistService;
 
     private AppProperties appProperties;
     private BookingSchedulerService schedulerService;
@@ -51,7 +54,7 @@ class BookingSchedulerServiceTest {
         appProperties = new AppProperties();
         appProperties.getBooking().setPendingTimeoutMs(15 * 60 * 1000L);
         schedulerService = new BookingSchedulerService(bookingRepository, appProperties, notificationService,
-                auditLogService, new SimpleMeterRegistry());
+                auditLogService, new SimpleMeterRegistry(), waitlistService);
     }
 
     private Booking pendingBooking() {
@@ -92,6 +95,7 @@ class BookingSchedulerServiceTest {
         assertThat(booking.getCancelReason()).contains("Auto-cancelled");
         verify(notificationService).notifyBookingStatusChange(org.mockito.ArgumentMatchers.eq(booking),
                 org.mockito.ArgumentMatchers.eq(NotificationType.BOOKING_CANCELLED), any(), any());
+        verify(waitlistService).notifyTableFreed(booking);
         verify(auditLogService).record(null, "BOOKING_AUTO_CANCELLED", "Booking", BOOKING_ID, "PENDING -> CANCELLED (timeout)");
     }
 

@@ -15,6 +15,7 @@ import com.keepbooking.notification.model.NotificationOutbox;
 import com.keepbooking.notification.model.NotificationType;
 import com.keepbooking.notification.repository.NotificationOutboxRepository;
 import com.keepbooking.notification.repository.NotificationRepository;
+import com.keepbooking.user.model.User;
 
 import lombok.RequiredArgsConstructor;
 
@@ -33,18 +34,32 @@ public class NotificationService {
      */
     @Transactional
     public void notifyBookingStatusChange(Booking booking, NotificationType type, String title, String message) {
+        notify(booking.getUser(), type, title, message, booking);
+    }
+
+    /**
+     * Same in-app + outbox delivery as {@link #notifyBookingStatusChange}, for notifications not
+     * tied to one of the recipient's own bookings (e.g. a waitlist "table opened up" ping, where
+     * the freed booking belongs to a different user).
+     */
+    @Transactional
+    public void notifyUser(User recipient, NotificationType type, String title, String message) {
+        notify(recipient, type, title, message, null);
+    }
+
+    private void notify(User recipient, NotificationType type, String title, String message, Booking relatedBooking) {
         Notification notification = Notification.builder()
-                .user(booking.getUser())
+                .user(recipient)
                 .type(type)
                 .title(title)
                 .message(message)
-                .booking(booking)
+                .booking(relatedBooking)
                 .build();
         notificationRepository.save(notification);
 
         notificationOutboxRepository.save(NotificationOutbox.builder()
-                .user(booking.getUser())
-                .booking(booking)
+                .user(recipient)
+                .booking(relatedBooking)
                 .type(type)
                 .title(title)
                 .message(message)

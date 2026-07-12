@@ -21,5 +21,6 @@
     <include file="db/changelog/migrations/V014__device_tokens.sql"/>
     <include file="db/changelog/migrations/V015__working_hours_overrides.sql"/>
     <include file="db/changelog/migrations/V016__notification_outbox.sql"/>
+    <include file="db/changelog/migrations/V017__waitlist.sql"/>
 
 </databaseChangeLog>

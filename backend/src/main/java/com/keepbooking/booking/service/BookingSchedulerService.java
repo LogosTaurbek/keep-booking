@@ -17,6 +17,7 @@ import com.keepbooking.common.audit.AuditLogService;
 import com.keepbooking.common.config.AppProperties;
 import com.keepbooking.notification.model.NotificationType;
 import com.keepbooking.notification.service.NotificationService;
+import com.keepbooking.waitlist.service.WaitlistService;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class BookingSchedulerService {
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
     private final MeterRegistry meterRegistry;
+    private final WaitlistService waitlistService;
 
     @Scheduled(fixedDelayString = "${app.booking.scheduler-interval-ms:60000}")
     @Transactional
@@ -56,6 +58,7 @@ public class BookingSchedulerService {
                     "Booking cancelled",
                     "Your booking at " + b.getRestaurant().getName() + " on " + b.getBookingDate()
                             + " was auto-cancelled — the restaurant didn't confirm it in time");
+            waitlistService.notifyTableFreed(b);
             auditLogService.record(null, "BOOKING_AUTO_CANCELLED", "Booking", b.getId(), "PENDING -> CANCELLED (timeout)");
             meterRegistry.counter("bookings.status.transitions.total", "status", "CANCELLED", "trigger", "auto").increment();
         });
