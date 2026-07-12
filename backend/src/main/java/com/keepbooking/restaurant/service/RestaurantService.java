@@ -6,6 +6,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -69,6 +72,7 @@ public class RestaurantService {
         return toDto(restaurantRepository.save(restaurant));
     }
 
+    @Cacheable(value = "restaurantCards", key = "#restaurantId")
     @Transactional(readOnly = true)
     public RestaurantDto getById(Long restaurantId) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
@@ -76,6 +80,9 @@ public class RestaurantService {
         return toDto(restaurant);
     }
 
+    @Cacheable(value = "restaurantSearch",
+            key = "'search:' + #cityId + ':' + #name + ':' + #cuisineSlug + ':' + #minRating "
+                    + "+ ':' + #pageable.pageNumber + ':' + #pageable.pageSize + ':' + #pageable.sort")
     @Transactional(readOnly = true)
     public PageResponse<RestaurantDto> search(Long cityId, String name, String cuisineSlug,
                                                BigDecimal minRating, Pageable pageable) {
@@ -110,12 +117,29 @@ public class RestaurantService {
         return PageResponse.of(page.map(this::toDto));
     }
 
+    @Caching(evict = {
+            @CacheEvict(value = "restaurantCards", key = "#restaurantId"),
+            @CacheEvict(value = "restaurantSearch", allEntries = true)
+    })
     @Transactional
     public RestaurantDto moderate(Long restaurantId, RestaurantStatus newStatus) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
         restaurant.setStatus(newStatus);
         return toDto(restaurantRepository.save(restaurant));
+    }
+
+    /**
+     * Invalidates the cached card and the whole search cache for a restaurant whose displayed
+     * fields (e.g. rating/reviewsCount) changed via a different module - callers must invoke this
+     * through the injected {@code RestaurantService} bean, not from within this class, since
+     * {@code @CacheEvict} only fires on calls that go through the Spring proxy.
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "restaurantCards", key = "#restaurantId"),
+            @CacheEvict(value = "restaurantSearch", allEntries = true)
+    })
+    public void evictCaches(Long restaurantId) {
     }
 
     private RestaurantDto toDto(Restaurant r) {

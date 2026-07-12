@@ -16,6 +16,7 @@ import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
+import com.keepbooking.restaurant.service.RestaurantService;
 import com.keepbooking.review.dto.CreateReviewRequest;
 import com.keepbooking.review.dto.ReviewDto;
 import com.keepbooking.review.model.Review;
@@ -30,6 +31,7 @@ public class ReviewService {
     private final ReviewRepository reviewRepository;
     private final BookingRepository bookingRepository;
     private final RestaurantRepository restaurantRepository;
+    private final RestaurantService restaurantService;
 
     @Transactional
     public ReviewDto create(Long userId, CreateReviewRequest request) {
@@ -93,6 +95,7 @@ public class ReviewService {
         restaurant.setRating(average);
         restaurant.setReviewsCount((int) count);
         restaurantRepository.save(restaurant);
+        restaurantService.evictCaches(restaurantId);
     }
 
     private ReviewDto toDto(Review r) {

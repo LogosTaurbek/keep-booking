@@ -1,5 +1,6 @@
 package com.keepbooking.common.dto;
 
+import java.io.Serializable;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -7,7 +8,7 @@ import org.springframework.data.domain.Page;
 import lombok.Getter;
 
 @Getter
-public class PageResponse<T> {
+public class PageResponse<T> implements Serializable {
 
     private final List<T> content;
     private final int page;

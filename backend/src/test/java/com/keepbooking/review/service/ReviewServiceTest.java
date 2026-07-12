@@ -23,6 +23,7 @@ import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
+import com.keepbooking.restaurant.service.RestaurantService;
 import com.keepbooking.review.dto.CreateReviewRequest;
 import com.keepbooking.review.dto.ReviewDto;
 import com.keepbooking.review.model.Review;
@@ -42,6 +43,8 @@ class ReviewServiceTest {
     private BookingRepository bookingRepository;
     @Mock
     private RestaurantRepository restaurantRepository;
+    @Mock
+    private RestaurantService restaurantService;
 
     private ReviewService reviewService;
 
@@ -50,7 +53,7 @@ class ReviewServiceTest {
 
     @BeforeEach
     void setUp() {
-        reviewService = new ReviewService(reviewRepository, bookingRepository, restaurantRepository);
+        reviewService = new ReviewService(reviewRepository, bookingRepository, restaurantRepository, restaurantService);
     }
 
     private User user() {
@@ -134,6 +137,7 @@ class ReviewServiceTest {
         assertThat(booking.getRestaurant().getRating()).isEqualByComparingTo("5.00");
         assertThat(booking.getRestaurant().getReviewsCount()).isEqualTo(1);
         verify(restaurantRepository).save(booking.getRestaurant());
+        verify(restaurantService).evictCaches(booking.getRestaurant().getId());
     }
 
     @Test
@@ -159,5 +163,6 @@ class ReviewServiceTest {
         verify(reviewRepository).delete(review);
         assertThat(restaurant.getRating()).isEqualByComparingTo("0.00");
         assertThat(restaurant.getReviewsCount()).isZero();
+        verify(restaurantService).evictCaches(restaurant.getId());
     }
 }

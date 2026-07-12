@@ -1,5 +1,6 @@
 package com.keepbooking.restaurant.dto;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.Set;
 
@@ -10,7 +11,7 @@ import lombok.Data;
 
 @Data
 @Builder
-public class RestaurantDto {
+public class RestaurantDto implements Serializable {
     private Long id;
     private Long companyId;
     private String name;

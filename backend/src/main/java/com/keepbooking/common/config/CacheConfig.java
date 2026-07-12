@@ -10,14 +10,18 @@ import org.springframework.data.redis.cache.RedisCacheConfiguration;
 @Configuration
 public class CacheConfig {
 
-    // Map pins carry a live "free tables now" flag, so they go stale far faster than reference
-    // data (which keeps the global 5 min TTL from application.yml) - tz2.txt §19 calls for a
-    // short TTL specifically for map/search results.
-    private static final Duration MAP_CACHE_TTL = Duration.ofSeconds(30);
+    // Map pins and search result pages go stale far faster than reference data (which keeps the
+    // global 5 min TTL from application.yml) - tz2.txt §19 calls for a short TTL specifically for
+    // map/search results. Restaurant cards (single-restaurant lookups) keep the global "medium"
+    // TTL since they're explicitly invalidated on the mutations that matter (moderation, rating
+    // recalculation) rather than relying on expiry alone.
+    private static final Duration SHORT_CACHE_TTL = Duration.ofSeconds(30);
 
     @Bean
-    public RedisCacheManagerBuilderCustomizer mapCacheTtlCustomizer() {
-        return builder -> builder.withCacheConfiguration("mapRestaurants",
-                RedisCacheConfiguration.defaultCacheConfig().entryTtl(MAP_CACHE_TTL));
+    public RedisCacheManagerBuilderCustomizer shortTtlCacheCustomizer() {
+        RedisCacheConfiguration shortTtl = RedisCacheConfiguration.defaultCacheConfig().entryTtl(SHORT_CACHE_TTL);
+        return builder -> builder
+                .withCacheConfiguration("mapRestaurants", shortTtl)
+                .withCacheConfiguration("restaurantSearch", shortTtl);
     }
 }
