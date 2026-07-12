@@ -4,6 +4,20 @@
 
 ## [Unreleased] — 2026-07-13
 
+### Added — `PATCH /api/v1/restaurants/{id}` (недостающий Update)
+- У ресторанов были Create/List/Get, но не было Update — не полноценный CRUD. Добавлен partial-update (только непустые поля применяются), owner-check по образцу `HallService`, инвалидация `restaurantCards`/`restaurantSearch` кэша тем же механизмом, что и `moderate()`
+- `UpdateRestaurantRequest` DTO, 3 новых unit-теста (`RestaurantServiceTest`) — not-found, access-denied для чужого ресторана, частичное обновление (не заданные поля не трогаются)
+- Найдено при подготовке к веб-админке заведений (`keepbooking-admin`, отдельный репозиторий) — нужен был реальный CRUD, а не только Create+Read
+
+### Fixed — IDOR: менеджер мог просматривать/менять брони чужого ресторана (OWASP Top 10, broken access control)
+- `BookingController.getRestaurantBookings` проверял только роль (`hasAnyRole('RESTAURANT_ADMIN', 'COMPANY_ADMIN', 'SUPER_ADMIN')`), но не то, что менеджер управляет именно **этим** рестораном — RESTAURANT_ADMIN одного заведения мог посмотреть список броней любого другого, просто подставив чужой `restaurantId` в URL
+- Хуже: `BookingService.updateStatus()` — `boolean isManager` флаг (просто «есть ли у актёра ЛЮБАЯ менеджерская роль где угодно») полностью обходил owner-check. Любой RESTAURANT_ADMIN/COMPANY_ADMIN мог подтвердить/отклонить/отменить/завершить **любую** бронь в системе, не только у своих ресторанов — уязвимость на запись, серьёзнее предыдущей
+- Тот же паттерн owner-check без SUPER_ADMIN-байпаса уже используется в `AnalyticsService.getRestaurantAnalytics` (добавлен ранее в этой же сессии) — расхождение между `@PreAuthorize` (пускает SUPER_ADMIN на уровне роли) и сервисным owner-check (не пускает, если не реальный владелец) уже было принятым в проекте поведением; повторил его же для консистентности, а не придумывал новый
+- Исправлено: `getRestaurantBookings(userId, restaurantId, ...)` теперь проверяет `restaurant.getCompany().getOwner().getId().equals(userId)`; `updateStatus()` — `isManager` больше не достаточен сам по себе, требуется `booking.getRestaurant().getCompany().getOwner().getId().equals(userId)`
+- 4 новых unit-теста (`BookingServiceTest`) — регрессионный тест на «менеджер не владеет этим рестораном → ACCESS_DENIED» плюс 3 теста на `getRestaurantBookings` (not-found/access-denied/success)
+- Проверено вживую: два независимых владельца, ресторан A и B, гость бронирует стол в A — владелец B (с ролью COMPANY_ADMIN) получает `403` и на `GET /bookings/restaurant/{A}`, и на `PATCH /bookings/{id}/status` для брони A; владелец A получает `200` на оба
+- Найдено при подготовке страницы «Управление бронями» в веб-админке — не стал строить UI поверх сломанной авторизационной границы
+
 ### Fixed — OWASP Dependency-Check: реальные CVE в транзитивных зависимостях (tz2.txt §22/§23)
 - После починки OOM в CI-джобе `dependencyCheckAnalyze` (дефолтный heap Gradle-демона 512 MiB не вытягивал разбор полной NVD-базы — поднят до `-Xmx4g` точечно для этого шага, не трогая остальные) скан реально дошёл до конца и нашёл 927 находок, 18 из них с CVSS ≥ 9.0 блокировали джоб
 - Разобрал вручную (не просто поднял порог, чтобы "красное стало зелёным") — свёл 18 CVE к первопричинам через NVD API: **Spring Framework 6.2.8** (CVE-2026-41855, десериализация в JMS-конвертерах, CVSS 9.8 — фикс в 6.2.18.1+), **Spring Boot 3.5.3** (CVE-2026-40974, отсутствие hostname verification в Cassandra auto-config — фикс в 3.5.14+; не эксплуатируется в этом проекте, т.к. Cassandra не используется, но исправлено бесплатно заодно), **Spring Security 6.5.1** (CVE-2026-22732, «HTTP-заголовки не пишутся» при lazy header writing — реальная проблема для любого Spring Security servlet-приложения, фикс в 6.5.9+), **Apache Tomcat 10.1.42** (несколько CVE, включая CVE-2025-55754 и CVE-2026-55276 — фикс в 10.1.56/57+), **Netty 4.1.122.Final** (CVE-2026-45674/47691 — DNS cache poisoning через невалидированный bailiwick CNAME/NS-записей, оба CVSS 10.0; CVE-2026-42581 — HTTP/1.0 request smuggling через конфликтующие Transfer-Encoding/Content-Length — фикс в 4.1.135/133.Final+)

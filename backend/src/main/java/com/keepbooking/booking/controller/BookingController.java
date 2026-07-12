@@ -62,15 +62,16 @@ public class BookingController {
         return ResponseEntity.ok(bookingService.getMyBookings(user.getId(), status, pageable));
     }
 
-    @Operation(summary = "Get restaurant bookings (manager only)")
+    @Operation(summary = "Get restaurant bookings (owner only)")
     @GetMapping("/restaurant/{restaurantId}")
     @PreAuthorize("hasAnyRole('RESTAURANT_ADMIN', 'COMPANY_ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<PageResponse<BookingDto>> getRestaurantBookings(
+            @AuthenticationPrincipal User user,
             @PathVariable Long restaurantId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         var pageable = PageRequest.of(page, size, Sort.by("bookingDate").descending());
-        return ResponseEntity.ok(bookingService.getRestaurantBookings(restaurantId, pageable));
+        return ResponseEntity.ok(bookingService.getRestaurantBookings(user.getId(), restaurantId, pageable));
     }
 
     @Operation(summary = "Update booking status (confirm / cancel / complete)")

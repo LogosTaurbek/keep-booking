@@ -18,6 +18,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
 
 import com.keepbooking.booking.dto.BookingDto;
 import com.keepbooking.booking.dto.CreateBookingRequest;
@@ -29,6 +32,7 @@ import com.keepbooking.common.audit.AuditLogService;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
 import com.keepbooking.notification.service.NotificationService;
+import com.keepbooking.restaurant.model.Company;
 import com.keepbooking.restaurant.model.Hall;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.model.RestaurantStatus;
@@ -72,6 +76,8 @@ class BookingServiceTest {
 
     private BookingService bookingService;
 
+    private static final Long RESTAURANT_OWNER_ID = 300L;
+
     private User user;
     private RestaurantTable table;
 
@@ -84,10 +90,13 @@ class BookingServiceTest {
         // dedicated test below override this to exercise the BOOKING_RESTAURANT_CLOSED path.
         lenient().when(workingHoursResolver.isOpenAt(any(), any(), any(), any())).thenReturn(true);
 
+        Company company = Company.builder().id(1L).name("Test Co")
+                .owner(User.builder().id(RESTAURANT_OWNER_ID).build()).build();
         Restaurant restaurant = Restaurant.builder()
                 .id(1L)
                 .name("Test Restaurant")
                 .status(RestaurantStatus.ACTIVE)
+                .company(company)
                 .build();
         Hall hall = Hall.builder().id(1L).restaurant(restaurant).name("Main Hall").build();
         table = RestaurantTable.builder()
@@ -328,10 +337,12 @@ class BookingServiceTest {
     }
 
     @Test
-    void updateStatusToConfirmedSetsConfirmedByAndAllowsManager() {
+    void updateStatusToConfirmedSetsConfirmedByAndAllowsManagerWhoOwnsTheRestaurant() {
         Booking booking = Booking.builder().id(1L).user(user).status(BookingStatus.PENDING)
                 .restaurant(table.getHall().getRestaurant()).table(table).build();
-        User manager = User.builder().id(200L).firstname("Mgr").lastname("Admin").email("mgr@test.com").build();
+        // The manager must be the actual owner of this booking's restaurant, not just hold a
+        // manager-tier role somewhere - see updateStatusThrowsAccessDeniedWhenManagerDoesNotOwnTheRestaurant.
+        User manager = User.builder().id(RESTAURANT_OWNER_ID).firstname("Mgr").lastname("Admin").email("mgr@test.com").build();
         when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking));
         when(userRepository.findById(manager.getId())).thenReturn(Optional.of(manager));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -344,6 +355,23 @@ class BookingServiceTest {
         assertThat(dto.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
         assertThat(booking.getConfirmedBy()).isEqualTo(manager);
         verify(waitlistService, never()).notifyTableFreed(any());
+    }
+
+    @Test
+    void updateStatusThrowsAccessDeniedWhenManagerDoesNotOwnTheRestaurant() {
+        // Regression test: `isManager=true` alone used to be sufficient - a RESTAURANT_ADMIN/
+        // COMPANY_ADMIN at any restaurant could confirm/cancel/complete bookings at restaurants
+        // they don't manage (IDOR). Only the owner of *this* booking's restaurant may act as manager.
+        Booking booking = Booking.builder().id(1L).user(user).status(BookingStatus.PENDING)
+                .restaurant(table.getHall().getRestaurant()).table(table).build();
+        when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking));
+
+        UpdateBookingStatusRequest request = new UpdateBookingStatusRequest();
+        request.setStatus(BookingStatus.CONFIRMED);
+
+        assertThatThrownBy(() -> bookingService.updateStatus(1L, 999L, request, true))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.ACCESS_DENIED);
     }
 
     @Test
@@ -364,5 +392,35 @@ class BookingServiceTest {
         assertThat(booking.getCancelledBy()).isEqualTo(user);
         assertThat(booking.getCancelReason()).isEqualTo("changed my mind");
         verify(waitlistService).notifyTableFreed(booking);
+    }
+
+    @Test
+    void getRestaurantBookingsThrowsWhenRestaurantNotFound() {
+        when(restaurantRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> bookingService.getRestaurantBookings(RESTAURANT_OWNER_ID, 1L, PageRequest.of(0, 20)))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.RESTAURANT_NOT_FOUND);
+    }
+
+    @Test
+    void getRestaurantBookingsThrowsAccessDeniedWhenActorDoesNotOwnTheRestaurant() {
+        when(restaurantRepository.findById(1L)).thenReturn(Optional.of(table.getHall().getRestaurant()));
+
+        assertThatThrownBy(() -> bookingService.getRestaurantBookings(999L, 1L, PageRequest.of(0, 20)))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void getRestaurantBookingsReturnsBookingsForTheOwner() {
+        Booking booking = Booking.builder().id(1L).user(user).status(BookingStatus.PENDING)
+                .restaurant(table.getHall().getRestaurant()).table(table).build();
+        when(restaurantRepository.findById(1L)).thenReturn(Optional.of(table.getHall().getRestaurant()));
+        when(bookingRepository.findByRestaurantIdOrderByBookingDateDesc(1L, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(java.util.List.of(booking)));
+
+        var result = bookingService.getRestaurantBookings(RESTAURANT_OWNER_ID, 1L, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).extracting(BookingDto::getId).containsExactly(1L);
     }
 }

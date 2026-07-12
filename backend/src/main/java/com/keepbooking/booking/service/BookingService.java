@@ -10,6 +10,7 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -144,7 +145,12 @@ public class BookingService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ApiException(ErrorCode.BOOKING_NOT_FOUND));
 
-        if (!isManager && !booking.getUser().getId().equals(userId)) {
+        // `isManager` only means "holds a manager-tier role somewhere" - on its own that let any
+        // restaurant/company admin confirm/cancel/complete bookings at restaurants they don't
+        // manage (IDOR). A manager may only act on a booking at a restaurant their own company owns.
+        boolean managesThisRestaurant = isManager
+                && booking.getRestaurant().getCompany().getOwner().getId().equals(userId);
+        if (!managesThisRestaurant && !booking.getUser().getId().equals(userId)) {
             throw new ApiException(ErrorCode.ACCESS_DENIED);
         }
 
@@ -199,7 +205,12 @@ public class BookingService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<BookingDto> getRestaurantBookings(Long restaurantId, Pageable pageable) {
+    public PageResponse<BookingDto> getRestaurantBookings(Long userId, Long restaurantId, Pageable pageable) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
+        if (!restaurant.getCompany().getOwner().getId().equals(userId)) {
+            throw new AccessDeniedException("You don't own this restaurant");
+        }
         return PageResponse.of(bookingRepository.findByRestaurantIdOrderByBookingDateDesc(restaurantId, pageable).map(this::toDto));
     }
 
