@@ -4,6 +4,14 @@
 
 ## [Unreleased] — 2026-07-11
 
+### Added — Аналитика ресторана (tz2.txt §15)
+- Новый модуль `analytics`: `GET /api/v1/restaurants/{restaurantId}/analytics?from=&to=`, только для владельца ресторана (`RESTAURANT_ADMIN`/`COMPANY_ADMIN`/`SUPER_ADMIN` + owner-check по `restaurant.company.owner`, тот же паттерн, что у Hall/Table/MenuItem/RestaurantPhoto/WorkingHours)
+- Отдаёт по диапазону дат: разбивку броней по статусам (`PENDING/CONFIRMED/REJECTED/CANCELLED/COMPLETED/NO_SHOW`), топ-5 популярных часов (группировка по `EXTRACT(HOUR FROM timeFrom)`), топ-5 популярных столиков, число уникальных гостей (`COUNT(DISTINCT userId)`) — новые агрегирующие JPQL-запросы в `BookingRepository`
+- `confirmationRate` — доля броней, покинувших `PENDING` подтверждёнными (`CONFIRMED/COMPLETED/NO_SHOW`) против отклонённых/отменённых. Это оценка снизу: бронь, подтверждённую и затем отменённую, невозможно отличить от отменённой сразу из `PENDING` без таблицы истории статусов — ограничение задокументировано в Javadoc `RestaurantAnalyticsDto.confirmationRate`
+- Сознательно не реализовано в этой итерации: «средняя загрузка» (требует моделирования времени/вместимости, которого сейчас нет), «средний чек» (цена не привязана к брони) и «динамика рейтинга» (нет исторических снепшотов рейтинга) — решено не подделывать эти метрики приблизительными числами, а оставить их до появления нужных данных
+- Ранее был только `AdminStatsService` — общесистемная статистика для `SUPER_ADMIN`, без разбивки по конкретному ресторану для его владельца
+- `AnalyticsServiceTest` (6 unit-тестов) — owner-check, `from > to` → `VALIDATION_ERROR`, агрегация по статусам, расчёт `confirmationRate`, нулевой `confirmationRate` когда все брони ещё `PENDING`
+
 ### Fixed — проверки времени брони игнорировали часовой пояс ресторана
 - `BookingService.validateBookingTime` и `AvailabilityService.validateTimeRange` сравнивали `date`+`timeFrom` (локальное время заведения) с `LocalDateTime.now(ZoneId.of("UTC"))` — жёстко захардкоженным UTC вместо `restaurant.getTimezone()`. Колонка `restaurants.timezone` существовала в БД и API с самого начала (Этап 1), но нигде не читалась при проверке "бронь не в прошлом". Для ресторана не в UTC (например, Алматы, UTC+5) это давало неверный результат на границе суток — 23:30 по местному времени ресторана могло ошибочно приниматься как уже прошедшее (или наоборот, пропускать бронь, которая по местному времени уже в прошлом). Найдено при сверке проекта с tz2.txt §6/§7 (требование "бизнес-правила бронирования считаются в таймзоне заведения")
 - Исправлено: обе проверки теперь берут `restaurant.getTimezone()` и сравнивают с `LocalDateTime.now(ZoneId.of(restaurantTimezone))`. `WorkingHoursService`/`AvailabilityService.validateOpenHours` уже были корректны — они не считают "now", а сравнивают время интервала с графиком работы посуточно, поэтому не требовали изменений

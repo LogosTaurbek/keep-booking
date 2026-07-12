@@ -63,4 +63,43 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
                                   @Param("date") LocalDate date,
                                   @Param("timeFrom") LocalTime timeFrom,
                                   @Param("timeTo") LocalTime timeTo);
+
+    @Query("""
+            SELECT b.status, COUNT(b) FROM Booking b
+            WHERE b.restaurant.id = :restaurantId AND b.bookingDate BETWEEN :from AND :to
+            GROUP BY b.status
+            """)
+    List<Object[]> countByStatusForRestaurant(@Param("restaurantId") Long restaurantId,
+                                              @Param("from") LocalDate from,
+                                              @Param("to") LocalDate to);
+
+    @Query("""
+            SELECT COUNT(DISTINCT b.user.id) FROM Booking b
+            WHERE b.restaurant.id = :restaurantId AND b.bookingDate BETWEEN :from AND :to
+            """)
+    long countDistinctGuestsForRestaurant(@Param("restaurantId") Long restaurantId,
+                                          @Param("from") LocalDate from,
+                                          @Param("to") LocalDate to);
+
+    @Query("""
+            SELECT extract(HOUR FROM b.timeFrom), COUNT(b) FROM Booking b
+            WHERE b.restaurant.id = :restaurantId AND b.bookingDate BETWEEN :from AND :to
+            GROUP BY extract(HOUR FROM b.timeFrom)
+            ORDER BY COUNT(b) DESC
+            """)
+    List<Object[]> findPopularHours(@Param("restaurantId") Long restaurantId,
+                                    @Param("from") LocalDate from,
+                                    @Param("to") LocalDate to,
+                                    Pageable pageable);
+
+    @Query("""
+            SELECT b.table.id, b.table.number, COUNT(b) FROM Booking b
+            WHERE b.restaurant.id = :restaurantId AND b.bookingDate BETWEEN :from AND :to
+            GROUP BY b.table.id, b.table.number
+            ORDER BY COUNT(b) DESC
+            """)
+    List<Object[]> findPopularTables(@Param("restaurantId") Long restaurantId,
+                                     @Param("from") LocalDate from,
+                                     @Param("to") LocalDate to,
+                                     Pageable pageable);
 }
