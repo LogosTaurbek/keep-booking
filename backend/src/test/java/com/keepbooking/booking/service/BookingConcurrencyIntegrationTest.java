@@ -31,10 +31,12 @@ import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.model.RestaurantStatus;
 import com.keepbooking.restaurant.model.RestaurantTable;
 import com.keepbooking.restaurant.model.TableStatus;
+import com.keepbooking.restaurant.model.WorkingHours;
 import com.keepbooking.restaurant.repository.CompanyRepository;
 import com.keepbooking.restaurant.repository.HallRepository;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.restaurant.repository.TableRepository;
+import com.keepbooking.restaurant.repository.WorkingHoursRepository;
 import com.keepbooking.user.model.User;
 import com.keepbooking.user.repository.UserRepository;
 
@@ -71,6 +73,8 @@ class BookingConcurrencyIntegrationTest {
     private TableRepository tableRepository;
     @Autowired
     private BookingRepository bookingRepository;
+    @Autowired
+    private WorkingHoursRepository workingHoursRepository;
 
     @Test
     void onlyOneOfManyConcurrentBookingsForTheSameTableAndSlotSucceeds() throws Exception {
@@ -138,6 +142,12 @@ class BookingConcurrencyIntegrationTest {
         Restaurant restaurant = restaurantRepository.save(Restaurant.builder()
                 .company(company).name("Concurrency Test Restaurant").status(RestaurantStatus.ACTIVE).build());
         Hall hall = hallRepository.save(Hall.builder().restaurant(restaurant).name("Main Hall").build());
+        // BookingService.create() checks working hours (tz2.txt §8/§11.1); without a schedule the
+        // resolver defaults to "always closed", so every booking attempt below would fail with
+        // BOOKING_RESTAURANT_CLOSED instead of exercising the double-booking guarantee under test.
+        IntStream.rangeClosed(1, 7).forEach(dayOfWeek -> workingHoursRepository.save(WorkingHours.builder()
+                .restaurant(restaurant).dayOfWeek(dayOfWeek)
+                .openTime(LocalTime.MIN).closeTime(LocalTime.of(23, 59)).isDayOff(false).build()));
         return tableRepository.save(RestaurantTable.builder()
                 .hall(hall).number("CT1").capacity(capacity).status(TableStatus.ACTIVE).build());
     }
