@@ -23,6 +23,8 @@ import com.keepbooking.notification.repository.NotificationOutboxRepository;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.user.model.User;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 /**
  * tz2.txt §14: outbox delivery must retry with backoff and eventually dead-letter rather than
  * retry forever, and must mark success so a delivered event is never re-sent by the next poll.
@@ -39,7 +41,7 @@ class NotificationOutboxProcessorTest {
 
     @BeforeEach
     void setUp() {
-        processor = new NotificationOutboxProcessor(outboxRepository, pushNotificationService);
+        processor = new NotificationOutboxProcessor(outboxRepository, pushNotificationService, new SimpleMeterRegistry());
     }
 
     private NotificationOutbox event(int attempts) {
