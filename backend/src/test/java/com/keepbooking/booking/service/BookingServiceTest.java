@@ -131,6 +131,36 @@ class BookingServiceTest {
     }
 
     @Test
+    void createTranslatesExclusionConstraintViolationToTableNotAvailable() {
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(tableRepository.findById(table.getId())).thenReturn(Optional.of(table));
+        when(bookingRepository.existsConflictingBooking(any(), any(), any(), any())).thenReturn(false);
+        when(bookingRepository.save(any(Booking.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("exclusion constraint violated"));
+
+        assertThatThrownBy(() -> bookingService.create(user.getId(), validRequest(), null))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.TABLE_NOT_AVAILABLE);
+    }
+
+    @Test
+    void createTranslatesLockAcquisitionFailureToTableNotAvailable() {
+        // Under heavy concurrent contention on the same table+slot, Postgres's GiST exclusion
+        // constraint check (V004) can surface as a lock failure instead of a constraint
+        // violation - both must resolve to the same client-facing outcome (regression test for
+        // a CI-only failure: CannotAcquireLockException wasn't caught, crashing with a 500).
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(tableRepository.findById(table.getId())).thenReturn(Optional.of(table));
+        when(bookingRepository.existsConflictingBooking(any(), any(), any(), any())).thenReturn(false);
+        when(bookingRepository.save(any(Booking.class)))
+                .thenThrow(new org.springframework.dao.CannotAcquireLockException("could not obtain lock"));
+
+        assertThatThrownBy(() -> bookingService.create(user.getId(), validRequest(), null))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.TABLE_NOT_AVAILABLE);
+    }
+
+    @Test
     void createThrowsWhenTableNotFound() {
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
         when(tableRepository.findById(table.getId())).thenReturn(Optional.empty());

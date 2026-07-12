@@ -6,6 +6,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.Optional;
 
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -116,7 +117,11 @@ public class BookingService {
             // NB: avoid the literal word "created" in the metric name — Micrometer's Prometheus
             // naming convention silently swallows it (collides with the OpenMetrics "_created" series convention)
             meterRegistry.counter("bookings.new.total").increment();
-        } catch (DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException | CannotAcquireLockException e) {
+            // Под сильной конкуренцией на один и тот же table_id+интервал GiST-проверка exclusion
+            // constraint (V004) иногда сигнализирует конфликт не как нарушение constraint
+            // (DataIntegrityViolationException), а как отказ получить блокировку
+            // (CannotAcquireLockException) — для клиента это тот же самый исход: слот уже занят.
             if (idempotencyKey != null) {
                 // Гонка: другой запрос с тем же Idempotency-Key уже создал бронь — DB unique constraint это финальная гарантия
                 dto = bookingRepository.findByIdempotencyKey(idempotencyKey).map(this::toDto)
