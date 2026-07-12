@@ -1,6 +1,5 @@
 package com.keepbooking.common.exception;
 
-import java.time.Instant;
 import java.util.List;
 
 import org.springframework.dao.DataIntegrityViolationException;

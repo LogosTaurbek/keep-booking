@@ -1,0 +1,36 @@
+<FindBugsFilter>
+    <!-- EI_EXPOSE_REP/EI_EXPOSE_REP2: SpotBugs flags every Lombok-generated getter/setter that
+         returns or stores a mutable reference (dates, collections, nested entities) as a defensive-
+         copying violation. For a layered Spring app where entities/DTOs never leave the JVM
+         boundary un-mapped, that's the JPA/DTO norm here, not a bug - excluded to keep findings
+         limited to things actually worth fixing (tz2.txt §22). -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!-- Generated code (Lombok @Builder, MapStruct impls, Liquibase) isn't hand-written and isn't
+         where a real bug would be introduced by a change. -->
+    <Match>
+        <Or>
+            <Class name="~.*\$Builder\$?.*"/>
+            <Class name="~.*MapperImpl"/>
+        </Or>
+    </Match>
+
+    <!-- VA_FORMAT_STRING_USES_NEWLINE: this text block is a JSON payload sent to S3 over HTTP,
+         not text written to a console/file - platform-specific line-ending conventions (%n vs \n)
+         genuinely don't apply here, so the suggested fix would be a no-op change, not a fix. -->
+    <Match>
+        <Class name="com.keepbooking.common.storage.FileStorageService"/>
+        <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
+    </Match>
+
+    <!-- HRS_REQUEST_PARAMETER_TO_HTTP_HEADER: the value is validated against SAFE_REQUEST_ID
+         (a strict [A-Za-z0-9_-]{1,100} allowlist) before it's ever echoed into the response
+         header - SpotBugs's taint tracking doesn't reason through regex sanitization, so this
+         is a false positive on the actual (already-fixed) header-injection risk, not a live one. -->
+    <Match>
+        <Class name="com.keepbooking.common.logging.RequestIdFilter"/>
+        <Bug pattern="HRS_REQUEST_PARAMETER_TO_HTTP_HEADER"/>
+    </Match>
+</FindBugsFilter>

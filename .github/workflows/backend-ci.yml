@@ -62,6 +62,65 @@ jobs:
       # `gradlew build` compiles, runs the Testcontainers-backed context-load test
       # (spins up real Postgres, applies every Liquibase changeset, then validates
       # the JPA mappings against the resulting schema) and assembles the jar —
-      # covering build + test + liquibase validation in one step.
+      # covering build + test + liquibase validation in one step. It also runs
+      # Checkstyle, SpotBugs and the JaCoCo coverage floor (tz2.txt §21-22) as part
+      # of the same `check` lifecycle, so a violation in any of them fails this step.
       - name: Build and test
         run: ./gradlew build
+
+      # Report artifacts for a PR-level failure that isn't a plain test failure - upload even if
+      # the build step above failed, so the specific Checkstyle/SpotBugs/coverage complaint is
+      # inspectable without re-running locally.
+      - name: Upload quality reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-reports
+          path: |
+            backend/build/reports/checkstyle/
+            backend/build/reports/spotbugs/
+            backend/build/reports/jacoco/test/html/
+            backend/build/reports/tests/test/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # OWASP Dependency-Check (tz2.txt §22): kept out of the main `build` step above - the free NVD
+  # feed is heavily rate-limited without an API key, which would make the main pipeline flaky for
+  # every contributor rather than just failing this one optional, non-blocking job. Add an
+  # NVD_API_KEY repo secret (https://nvd.nist.gov/developers/request-an-api-key) to get faster,
+  # more reliable scans; without one this job still runs, just slower.
+  dependency-check:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: OWASP Dependency-Check
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: ./gradlew dependencyCheckAnalyze
+
+      - name: Upload dependency-check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: backend/build/reports/dependency-check-report.html
+          retention-days: 14
+          if-no-files-found: ignore

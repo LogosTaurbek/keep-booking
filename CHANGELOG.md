@@ -4,6 +4,61 @@
 
 ## [Unreleased] — 2026-07-12
 
+### Added — CI: Checkstyle, SpotBugs, JaCoCo, OWASP Dependency-Check (tz2.txt §21-22)
+- Checkstyle (`config/checkstyle/checkstyle.xml`) — намеренно узкий набор правил на реальные баги (unused imports, empty catch, equals/hashCode), без форматирования/отступов — репозиторий никогда не жил под style-тулом, полный reformat дал бы нерелевантный шума-диф на сотни файлов
+- SpotBugs (`config/spotbugs/exclude.xml`) — байткод-анализ; `EI_EXPOSE_REP`/`EI_EXPOSE_REP2` исключены (норма для JPA-сущностей/DTO с Lombok-геттерами, не баг в этом слоистом приложении)
+- JaCoCo: отчёт + verification-порог (`jacocoTestCoverageVerification`, встроен в `check`) — LINE ≥65% в целом, ≥80% агрегированно по всем `*.service`-пакетам (доменная логика, tz2.txt §21 "≥70%"). Порог по PACKAGE-элементу (у каждого пакета отдельно) оказался слишком строгим — у тонких сервисов вроде `ReferenceService` (4 кэш-passthrough метода) закономерно 0% и нет смысла требовать unit-тест ради теста; переключено на один агрегированный BUNDLE-порог по всем `*.service` вместе
+- OWASP Dependency-Check подключён, но **не встроен** в основной `build`/`check` — бесплатный NVD-фид сильно rate-limited без API-ключа, что сделало бы CI нестабильным для всех, а не только для тех, кто явно его гоняет. Отдельный необязательный джоб `dependency-check` в `backend-ci.yml` (`continue-on-error: true`), опционально ускоряется секретом `NVD_API_KEY`
+- Обе аналитические Gradle-ловушки по пути: (1) `io.spring.dependency-management` глобально даунгрейдил `commons-lang3` до версии, несовместимой с движком SpotBugs 4.10.x (`NoClassDefFoundError: org/apache/commons/lang3/Strings`) — обычный `resolutionStrategy.force` на конфигурацию `spotbugs` проигрывал BOM; помогло только `dependencyManagement { dependencies { dependency ... } }` — override через тот же механизм, которым сам Spring управляет версиями; (2) `jacocoTestReport { dependsOn test }` вместе с `test { finalizedBy jacocoTestReport }` — Gradle не запускает finalizer, если его же явная `dependsOn`-зависимость упала, поэтому отчёт о покрытии вообще не генерировался при падении тестов (ровно тот случай, когда он нужнее всего) — `dependsOn` убран, порядок и так гарантирован через `finalizedBy`
+- По пути SpotBugs нашёл 4 реальные проблемы (см. следующую запись) — CI-гейт сразу окупился
+
+### Fixed — client-supplied `X-Request-Id` эхировался в HTTP-заголовок ответа без валидации
+- `RequestIdFilter` брал значение заголовка `X-Request-Id` от клиента как есть и клал его обратно в `response.setHeader(...)` — классический CRLF/header-injection вектор (OWASP Top-10, tz2.txt §23), пойман SpotBugs (`HRS_REQUEST_PARAMETER_TO_HTTP_HEADER`). Исправлено allowlist-регуляркой (`[A-Za-z0-9_-]{1,100}`) — значение, не прошедшее валидацию, заменяется на свежий UUID, как если бы заголовок вообще не был передан
+- Заодно: `User` (implements `UserDetails extends Serializable`) не объявлял `serialVersionUID`, а lazy-поля `country`/`city` держали ссылки на несериализуемые JPA-сущности — оба помечены/добавлены (`transient` на полях, `serialVersionUID` на классе)
+- `RequestIdFilterTest` (3 unit-теста, ранее не было вообще) — валидный ID эхируется как есть, отсутствие заголовка генерирует UUID, вредоносное значение (`\r\nSet-Cookie: evil=1`) заменяется на свежий UUID вместо прохода насквозь
+
+### Fixed — конкурентное бронирование иногда падало 500 вместо 409 под нагрузкой
+- Под сильной конкуренцией (10 потоков одновременно бьются за один и тот же стол/слот) GiST-проверка exclusion constraint в Postgres (`no_double_booking`, V004) иногда сигнализирует конфликт не как нарушение constraint (`DataIntegrityViolationException`), а как отказ получить блокировку (`CannotAcquireLockException`) — `BookingService.create()` ловил только первый тип, второй пробрасывался наружу необработанным и крашил запрос вместо честного `409 TABLE_NOT_AVAILABLE`. Поймано на прогоне `BookingConcurrencyIntegrationTest` в CI (в песочнице агента Testcontainers не запускаются вообще, поэтому локально не воспроизводилось)
+- Исправлено расширением `catch` до `DataIntegrityViolationException | CannotAcquireLockException` — оба транслируются в одинаковый клиентский исход, как и требует tz2.txt §11.2
+- 2 новых unit-теста на `BookingService.create()` (ветка вообще не была покрыта тестами раньше): нарушение constraint и отказ блокировки оба резолвятся в `TABLE_NOT_AVAILABLE`
+
+### Added — Лист ожидания (waitlist, tz2.txt §11.4 / §25 этап 3)
+- Новый модуль `waitlist`: `POST /api/v1/waitlist` (join, идемпотентно — повторный join на тот же слот возвращает существующую запись вместо ошибки, партиционный уникальный индекс `WHERE status = 'ACTIVE'`), `DELETE /api/v1/waitlist/{id}` (leave, owner-check), `GET /api/v1/waitlist/my`
+- `WaitlistService.notifyTableFreed()` — при отмене/отклонении брони уведомляет **только одного**, дольше всех ждущего подходящего пользователя (не рассылка всем в очереди), с учётом вместимости стола (`capacity`/`minCapacity`) и пересечения времени (та же формула, что и для double-booking, tz2.txt §10.3). Хук стоит в `BookingService.updateStatus()` (ручная отмена/отклонение) и `BookingSchedulerService.autoCancelExpiredPending()` (авто-отмена по таймауту) — оба атомарно, в той же транзакции, что и сама отмена
+- `NotificationService.notifyUser()` — новый обобщённый метод уведомления не по своей брони (существующий `notifyBookingStatusChange` был жёстко привязан к владельцу брони — не годился для оповещения ожидающего в очереди пользователя, чья бронь тут ни при чём)
+- Новый тип `WAITLIST_TABLE_AVAILABLE` — расширены CHECK-констрейнты `notifications`/`notification_outbox`
+- `WaitlistServiceTest` (8 unit-тестов) — идемпотентность join, owner-check на leave, уведомление только самого раннего подходящего кандидата с пропуском тех, кто не проходит по `minCapacity`
+- Проверено вживую: полный цикл забронировал → подтвердил → третий пользователь встал в очередь → первый отменил бронь → запись очереди мгновенно перешла в `NOTIFIED`, in-app уведомление и запись в push-outbox созданы атомарно
+
+### Added — Prometheus + Grafana локальный observability-стек (tz2.txt §17/§20)
+- `docker-compose.yml`: сервисы `prometheus` (скрейпит `host.docker.internal:8080/actuator/prometheus` каждые 15с — приложение работает на хосте вне docker-сети) и `grafana` (порт 3001, чтобы не занимать 3000, зарезервированный под фронтенд-дев-сервер)
+- `observability/prometheus/prometheus.yml` — конфиг скрейпа; `observability/grafana/provisioning/` — автопровижининг датасорса и дашборда без ручной настройки при первом старте
+- `observability/grafana/dashboards/keepbooking-overview.json` — 6 панелей ровно по списку из tz2.txt §17: HTTP latency (p95), error rate, брони по статусам, доставка push-уведомлений, cache hit rate, пул БД (HikariCP)
+- Новая метрика `notifications.outbox.delivered.total{outcome=sent|retry|dead_letter}` в `NotificationOutboxProcessor` — без неё панель «доставка уведомлений» была бы пустой
+- Проверено вживую: полный стек поднят, создана/подтверждена бронь, сгенерирован HTTP/кэш-трафик — все 6 метрик дашборда подтверждены реальными данными в Prometheus, датасорс и дашборд корректно запровижены в Grafana API
+
+### Added — Transactional outbox для доставки push-уведомлений (tz2.txt §14)
+- Новая таблица `notification_outbox` (миграция V016): событие пишется в той же транзакции, что и бизнес-операция (смена статуса брони), отдельный `@Scheduled`-воркер (`NotificationOutboxWorker`, каждые 30с) забирает и доставляет независимо от исходного запроса
+- `NotificationOutboxProcessor` — обрабатывает одно событие в своей транзакции: успех → `SENT`; неудача → экспоненциальный backoff (10с → 300с cap) до 5 попыток, после чего `DEAD_LETTER` вместо бесконечных ретраев
+- `FirebaseMessageSender` — отдельный бин с `@Retry` (Resilience4j, новая зависимость, 3 попытки/500мс) на сам вызов FCM; вынесен в отдельный класс специально, чтобы не словить self-invocation ловушку Spring AOP (аннотация на методе, вызываемом через `this.` изнутри того же класса, тихо не сработала бы)
+- `PushNotificationService.send()` больше не глотает `FirebaseMessagingException` молча — пробрасывает её процессору для ретрая/dead-letter, как и требует tz2.txt §14 "идемпотентность доставки, dead-letter для неудачных"
+- `NotificationOutboxProcessorTest` (3 unit-теста) — успех/retry-с-backoff/dead-letter-после-исчерпания попыток
+- Проверено вживую: подтверждена бронь → строка появилась в outbox со статусом `PENDING` атомарно с транзакцией → через ~30с воркер подхватил и пометил `SENT`
+
+### Added — Кэширование карточек и результатов поиска ресторанов (tz2.txt §19)
+- `RestaurantService.getById()` — `@Cacheable("restaurantCards")`, глобальный "средний" TTL (5 мин из `application.yml`)
+- `RestaurantService.search()` — `@Cacheable("restaurantSearch")`, ключ по всем фильтрам+пагинации, короткий TTL (30с) — отдельный `CacheConfig` с `RedisCacheManagerBuilderCustomizer`, задающим TTL точечно для этого кэша поверх глобального дефолта
+- Инвалидация: `RestaurantService.moderate()` (смена статуса) и новый публичный `RestaurantService.evictCaches(id)`, вызываемый из `ReviewService` после пересчёта рейтинга — self-invocation внутри `RestaurantService` не сработал бы с `@CacheEvict`, поэтому пересчёт рейтинга (живёт в другом сервисе) обязан дёргать метод именно через инжектированный бин, а не напрямую
+- `RestaurantDto`/`PageResponse` помечены `Serializable` — нужно для Redis-сериализации, как и у остальных кэшируемых DTO в проекте
+- Проверено вживую: TTL в Redis подтверждён (`restaurantCards` ~289с из 300, `restaurantSearch` ~19с из 30), полный цикл инвалидации — создание отзыва мгновенно вычищает оба ключа, следующий запрос сразу отдаёт пересчитанный рейтинг
+
+### Added — Карта ресторанов для мобильного приложения (tz2.txt §12)
+- `GET /api/v1/map` — рестораны в bounding box (`minLat/maxLat/minLng/maxLng`) или радиусе (`lat/lng/radiusKm`, переиспользует существующий geo-поиск `RestaurantRepository.findNearby`), с координатами, статусом, рейтингом и флагом `hasFreeTablesNow`
+- `AvailabilityService.hasFreeTablesNow()` — лёгкая проверка «есть ли свободный стол в ближайшие 30 минут» (открыт по расписанию + есть незабронированный подходящий по вместимости стол), переиспользует существующие репозитории вместо дублирования логики `getAvailableTables`
+- Кэш в Redis с коротким TTL (30с, тот же механизм, что и для поиска — см. следующую запись) — флаг `hasFreeTablesNow` дорого считать на каждый запрос карты и он быстро устаревает, короткий TTL специально выделен для карты/поиска в tz2.txt §19
+- `MapServiceTest` (3 unit-теста) + 5 новых тестов на `hasFreeTablesNow` в `AvailabilityServiceTest`
+- По пути: эндпоинт изначально возвращал 403 — забыл добавить `/api/v1/map/**` в публичные пути `SecurityConfig`, поймано на живом смоук-тесте и поправлено
+
 ### Added — RFC 7807: `type` и `traceId` в теле ошибки (tz2.txt §5.1)
 - `ProblemDetail` дополнен полями `type` (стабильный URI вида `https://keepbooking.dev/errors/table-not-available`, детерминированно выводится из имени `ErrorCode` через новый `ErrorCode.getTypeUri()`) и `traceId`
 - `traceId` берётся из MDC: сперва `traceId` (OpenTelemetry, если трейсинг сработал для запроса), иначе `requestId` (correlation ID из `RequestIdFilter`, который проставлен всегда) — клиент может передать значение в саппорт для поиска по логам/Jaeger, даже если по какой-то причине трейс не создался

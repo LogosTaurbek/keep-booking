@@ -2,6 +2,7 @@ package com.keepbooking.common.logging;
 
 import java.io.IOException;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
@@ -26,13 +27,18 @@ public class RequestIdFilter extends OncePerRequestFilter {
 
     private static final String HEADER = "X-Request-Id";
     private static final String MDC_KEY = "requestId";
+    // Client-supplied values are echoed straight back into a response header - unrestricted, that's
+    // a CRLF/header-injection vector (OWASP), so only accept a safe correlation-id-shaped value and
+    // fall back to a fresh UUID for anything else, same as if no header were sent at all.
+    private static final Pattern SAFE_REQUEST_ID = Pattern.compile("[A-Za-z0-9_-]{1,100}");
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
-        String requestId = StringUtils.hasText(request.getHeader(HEADER))
-                ? request.getHeader(HEADER)
+        String suppliedRequestId = request.getHeader(HEADER);
+        String requestId = (StringUtils.hasText(suppliedRequestId) && SAFE_REQUEST_ID.matcher(suppliedRequestId).matches())
+                ? suppliedRequestId
                 : UUID.randomUUID().toString();
 
         MDC.put(MDC_KEY, requestId);

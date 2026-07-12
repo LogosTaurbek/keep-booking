@@ -42,6 +42,8 @@ import lombok.Setter;
 @AllArgsConstructor
 public class User extends BaseEntity implements UserDetails {
 
+    private static final long serialVersionUID = 1L;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -60,13 +62,17 @@ public class User extends BaseEntity implements UserDetails {
     @Column(nullable = false)
     private String passwordHash;
 
+    // transient (Java, not JPA @Transient): User implements UserDetails, which extends
+    // Serializable - these lazy JPA associations point to non-Serializable entities and would
+    // break Java serialization (e.g. a Hibernate proxy holding a live session) if it were ever
+    // triggered; excluding them from it doesn't affect normal JPA persistence.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "country_id")
-    private Country country;
+    private transient Country country;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "city_id")
-    private City city;
+    private transient City city;
 
     private String avatarUrl;
 

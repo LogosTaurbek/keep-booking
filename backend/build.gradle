@@ -2,6 +2,13 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.5.3'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
+    id 'checkstyle'
+    id 'com.github.spotbugs' version '6.5.8'
+    // Not wired into `build`/`check` (see the dependencyCheckAnalyze comment below) - the free
+    // NVD feed is heavily rate-limited without an API key, which would make CI unreliable for
+    // every contributor rather than just the ones running it deliberately.
+    id 'org.owasp.dependencycheck' version '12.2.2'
 }
 
 group = 'com.keepbooking'
@@ -16,6 +23,87 @@ java {
 configurations {
     compileOnly {
         extendsFrom annotationProcessor
+    }
+}
+
+checkstyle {
+    toolVersion = '13.8.0'
+    configFile = file('config/checkstyle/checkstyle.xml')
+    maxWarnings = 0
+    // Test code isn't held to the same bar - Mockito's `any()`/`eq()` static-import style triggers
+    // false positives here, and it's not what ships to production.
+    sourceSets = [sourceSets.main]
+}
+
+spotbugs {
+    ignoreFailures = false
+    excludeFilter = file('config/spotbugs/exclude.xml')
+}
+
+tasks.spotbugsTest.enabled = false
+
+tasks.spotbugsMain {
+    reports {
+        html {
+            required = true
+            outputLocation = file("$buildDir/reports/spotbugs/main.html")
+        }
+        xml.required = false
+    }
+}
+
+jacoco {
+    toolVersion = '0.8.12'
+}
+
+jacocoTestReport {
+    // Not `dependsOn test`: combined with `finalizedBy` below, a dependsOn here would make Gradle
+    // skip this report whenever `test` fails (a finalizer with a failed hard dependency doesn't
+    // run) - exactly the CI-relevant case (this sandbox's known Docker-only test failures) where
+    // seeing the coverage of everything that DID run still matters.
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+tasks.named('test') {
+    finalizedBy jacocoTestReport
+}
+
+// tz2.txt §21: ">= 70% покрытие доменной логики". Measured locally (unit tests only, no
+// Testcontainers - see backend-ci.yml): overall LINE 69.3%, *.service packages 85.4% - CI runs
+// the Testcontainers suite too, so its real numbers run higher than these floors.
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                minimum = 0.65
+            }
+        }
+        rule {
+            // BUNDLE (default element): one combined ratio across all *.service packages, not a
+            // per-package minimum - some (e.g. reference.service's thin cache passthroughs) don't
+            // individually warrant dedicated unit tests, but the domain logic as a whole should.
+            includes = ['com.keepbooking.*.service']
+            limit {
+                counter = 'LINE'
+                minimum = 0.80
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification
+
+// `./gradlew dependencyCheckAnalyze` - deliberately not part of `build`/`check` (see the plugins
+// block comment). NVD_API_KEY, if set, speeds up and stabilizes the NVD feed download.
+dependencyCheck {
+    failBuildOnCVSS = 9
+    nvd {
+        apiKey = System.getenv('NVD_API_KEY')
     }
 }
 
@@ -35,6 +123,14 @@ ext {
 dependencyManagement {
     imports {
         mavenBom "software.amazon.awssdk:bom:${awsSdkVersion}"
+    }
+    dependencies {
+        // Spring Boot's BOM pins commons-lang3 (a transitive dependency only - nothing here
+        // depends on it directly) to a version older than what the SpotBugs 4.10.x engine
+        // requires at runtime (NoClassDefFoundError: org/apache/commons/lang3/Strings).
+        // This override applies project-wide via Spring's own managed-version mechanism, which
+        // a plain resolutionStrategy.force on just the spotbugs configuration didn't win against.
+        dependency 'org.apache.commons:commons-lang3:3.20.0'
     }
 }
 
