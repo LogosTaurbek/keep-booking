@@ -2,6 +2,19 @@
 
 Формат по мотивам [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/). Версий/тегов пока нет — записи сгруппированы по дате.
 
+## [Unreleased] — 2026-07-12
+
+### Added — Праздники и ночной график в рабочих часах (tz2.txt §8)
+- Новая таблица `restaurant_working_hours_overrides` (миграция V015): per-date override недельного расписания (`date`, `openTime`/`closeTime`, `isClosed`), уникальна по `(restaurant_id, date)`. Полностью замещает недельную запись на конкретную дату, когда присутствует
+- `WorkingHoursResolver` — единая точка резолвинга "открыт ли ресторан на [from,to) в дату X": сначала смотрит override на эту дату, иначе — недельное расписание по `dayOfWeek`. Понимает ночной график (`closeTime < openTime`, например 18:00–02:00): вечерняя часть проверяется в рамках текущего дня, а раннее утро (например бронь на 01:00) дополнительно сверяется с ночным графиком ВЧЕРАШНЕГО дня — раньше при закрытии после полуночи бронь в первые часы суток либо неверно отклонялась, либо неверно принималась в зависимости от того, как была настроена запись на "сегодня"
+- `AvailabilityService` и `WorkingHoursService` переведены на общий `WorkingHoursResolver` вместо прямой работы с `WorkingHoursRepository`, чтобы override/overnight-логика не дублировалась
+- `PUT/GET /api/v1/restaurants/{id}/working-hours/overrides`, `DELETE /api/v1/restaurants/{id}/working-hours/overrides/{date}` — CRUD праздников/спецдней, owner-check как у остального расписания
+- Валидация: если день/override не помечен как closed/dayOff, `openTime`/`closeTime` обязательны и не могут совпадать (раньше это не проверялось вообще — можно было сохранить нерабочую конфигурацию без ошибки)
+
+### Fixed — `BookingService.create()` не проверял рабочие часы вообще
+- Проверка графика работы существовала только в read-only `GET /availability` (для списка свободных столиков); сам `POST /bookings` её не делал — можно было создать бронь в закрытый день или вне часов работы, просто не заходя на `/availability` перед этим. Обнаружено по пути при добавлении overrides/overnight-логики. `BookingService.create()` теперь тоже вызывает `WorkingHoursResolver.isOpenAt(...)` и возвращает `BOOKING_RESTAURANT_CLOSED` (как и `/availability`)
+- `WorkingHoursResolverTest` (11 unit-тестов) — override поверх недельного расписания, обычные часы, ночной график (вечерняя часть и перенос через полночь с проверкой предыдущего дня), отсутствие переноса с не-ночного предыдущего дня. `AvailabilityServiceTest`/`BookingServiceTest`/`WorkingHoursServiceTest` обновлены под новые зависимости и дополнены тестами на override CRUD, валидацию часов и `BOOKING_RESTAURANT_CLOSED` при создании брони
+
 ## [Unreleased] — 2026-07-11
 
 ### Added — Аналитика ресторана (tz2.txt §15)

@@ -32,6 +32,7 @@ import com.keepbooking.restaurant.model.RestaurantTable;
 import com.keepbooking.restaurant.model.TableStatus;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.restaurant.repository.TableRepository;
+import com.keepbooking.restaurant.service.WorkingHoursResolver;
 import com.keepbooking.user.model.User;
 import com.keepbooking.user.repository.UserRepository;
 
@@ -49,6 +50,7 @@ public class BookingService {
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
     private final MeterRegistry meterRegistry;
+    private final WorkingHoursResolver workingHoursResolver;
 
     @Transactional
     public BookingDto create(Long userId, CreateBookingRequest request, String idempotencyKey) {
@@ -82,6 +84,10 @@ public class BookingService {
 
         validateBookingTime(request.getBookingDate(), request.getTimeFrom(), request.getTimeTo(), restaurant.getTimezone());
         validateGuestCount(table, request.getGuestCount());
+
+        if (!workingHoursResolver.isOpenAt(restaurant.getId(), request.getBookingDate(), request.getTimeFrom(), request.getTimeTo())) {
+            throw new ApiException(ErrorCode.BOOKING_RESTAURANT_CLOSED);
+        }
 
         // Проверка конфликта в JPQL (резервная, exclusion constraint в БД — финальная гарантия)
         if (bookingRepository.existsConflictingBooking(

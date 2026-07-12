@@ -17,10 +17,8 @@ import com.keepbooking.restaurant.dto.TableDto;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.model.RestaurantStatus;
 import com.keepbooking.restaurant.model.RestaurantTable;
-import com.keepbooking.restaurant.model.WorkingHours;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.restaurant.repository.TableRepository;
-import com.keepbooking.restaurant.repository.WorkingHoursRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -29,7 +27,7 @@ import lombok.RequiredArgsConstructor;
 public class AvailabilityService {
 
     private final RestaurantRepository restaurantRepository;
-    private final WorkingHoursRepository workingHoursRepository;
+    private final WorkingHoursResolver workingHoursResolver;
     private final TableRepository tableRepository;
     private final BookingRepository bookingRepository;
 
@@ -66,18 +64,7 @@ public class AvailabilityService {
     }
 
     private void validateOpenHours(Long restaurantId, LocalDate date, LocalTime from, LocalTime to) {
-        int dayOfWeek = date.getDayOfWeek().getValue();
-        WorkingHours hours = workingHoursRepository.findByRestaurantIdOrderByDayOfWeek(restaurantId).stream()
-                .filter(wh -> wh.getDayOfWeek().equals(dayOfWeek))
-                .findFirst()
-                .orElseThrow(() -> new ApiException(ErrorCode.BOOKING_RESTAURANT_CLOSED));
-
-        boolean closed = Boolean.TRUE.equals(hours.getIsDayOff())
-                || hours.getOpenTime() == null || hours.getCloseTime() == null
-                || from.isBefore(hours.getOpenTime())
-                || to.isAfter(hours.getCloseTime());
-
-        if (closed) {
+        if (!workingHoursResolver.isOpenAt(restaurantId, date, from, to)) {
             throw new ApiException(ErrorCode.BOOKING_RESTAURANT_CLOSED);
         }
     }

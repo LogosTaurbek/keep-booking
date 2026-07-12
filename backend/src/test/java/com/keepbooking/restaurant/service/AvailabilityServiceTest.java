@@ -25,14 +25,14 @@ import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.model.RestaurantStatus;
 import com.keepbooking.restaurant.model.RestaurantTable;
 import com.keepbooking.restaurant.model.TableStatus;
-import com.keepbooking.restaurant.model.WorkingHours;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.restaurant.repository.TableRepository;
-import com.keepbooking.restaurant.repository.WorkingHoursRepository;
 
 /**
  * Unit tests for the availability-check critical path (tz2.txt §10 / §21) —
  * status/hours/time-window validation and filtering of already-booked tables.
+ * Working-hours resolution itself (weekly schedule, overrides, overnight carry-over) is
+ * covered in {@link WorkingHoursResolverTest}; here it's mocked to isolate this service's logic.
  */
 @ExtendWith(MockitoExtension.class)
 class AvailabilityServiceTest {
@@ -40,7 +40,7 @@ class AvailabilityServiceTest {
     @Mock
     private RestaurantRepository restaurantRepository;
     @Mock
-    private WorkingHoursRepository workingHoursRepository;
+    private WorkingHoursResolver workingHoursResolver;
     @Mock
     private TableRepository tableRepository;
     @Mock
@@ -50,22 +50,14 @@ class AvailabilityServiceTest {
 
     private static final Long RESTAURANT_ID = 1L;
     private static final LocalDate TOMORROW = LocalDate.now().plusDays(1);
-    private static final int TOMORROW_DOW = TOMORROW.getDayOfWeek().getValue();
 
     private Restaurant activeRestaurant() {
         return Restaurant.builder().id(RESTAURANT_ID).name("Test Restaurant").status(RestaurantStatus.ACTIVE).build();
     }
 
-    private WorkingHours openAllDay(Restaurant restaurant) {
-        return WorkingHours.builder()
-                .restaurant(restaurant).dayOfWeek(TOMORROW_DOW)
-                .openTime(LocalTime.of(9, 0)).closeTime(LocalTime.of(23, 0)).isDayOff(false)
-                .build();
-    }
-
     @org.junit.jupiter.api.BeforeEach
     void setUp() {
-        availabilityService = new AvailabilityService(restaurantRepository, workingHoursRepository,
+        availabilityService = new AvailabilityService(restaurantRepository, workingHoursResolver,
                 tableRepository, bookingRepository);
     }
 
@@ -112,41 +104,14 @@ class AvailabilityServiceTest {
     }
 
     @Test
-    void throwsWhenNoWorkingHoursEntryForRequestedDay() {
+    void throwsWhenResolverReportsClosed() {
         Restaurant restaurant = activeRestaurant();
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(java.util.Optional.of(restaurant));
-        when(workingHoursRepository.findByRestaurantIdOrderByDayOfWeek(RESTAURANT_ID)).thenReturn(List.of());
+        when(workingHoursResolver.isOpenAt(RESTAURANT_ID, TOMORROW, LocalTime.of(12, 0), LocalTime.of(13, 0)))
+                .thenReturn(false);
 
         assertThatThrownBy(() -> availabilityService.getAvailableTables(
                 RESTAURANT_ID, TOMORROW, LocalTime.of(12, 0), LocalTime.of(13, 0), 2))
-                .isInstanceOf(ApiException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.BOOKING_RESTAURANT_CLOSED);
-    }
-
-    @Test
-    void throwsWhenRequestedDayIsMarkedAsDayOff() {
-        Restaurant restaurant = activeRestaurant();
-        WorkingHours dayOff = WorkingHours.builder()
-                .restaurant(restaurant).dayOfWeek(TOMORROW_DOW).isDayOff(true).build();
-        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(java.util.Optional.of(restaurant));
-        when(workingHoursRepository.findByRestaurantIdOrderByDayOfWeek(RESTAURANT_ID)).thenReturn(List.of(dayOff));
-
-        assertThatThrownBy(() -> availabilityService.getAvailableTables(
-                RESTAURANT_ID, TOMORROW, LocalTime.of(12, 0), LocalTime.of(13, 0), 2))
-                .isInstanceOf(ApiException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.BOOKING_RESTAURANT_CLOSED);
-    }
-
-    @Test
-    void throwsWhenRequestedSlotIsOutsideOpenHours() {
-        Restaurant restaurant = activeRestaurant();
-        WorkingHours hours = openAllDay(restaurant); // 09:00-23:00
-        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(java.util.Optional.of(restaurant));
-        when(workingHoursRepository.findByRestaurantIdOrderByDayOfWeek(RESTAURANT_ID)).thenReturn(List.of(hours));
-
-        // requested 07:00-08:00, before opening at 09:00
-        assertThatThrownBy(() -> availabilityService.getAvailableTables(
-                RESTAURANT_ID, TOMORROW, LocalTime.of(7, 0), LocalTime.of(8, 0), 2))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.BOOKING_RESTAURANT_CLOSED);
     }
@@ -154,7 +119,6 @@ class AvailabilityServiceTest {
     @Test
     void returnsOnlyTablesNotAlreadyBookedForTheSlot() {
         Restaurant restaurant = activeRestaurant();
-        WorkingHours hours = openAllDay(restaurant);
         Hall hall = Hall.builder().id(1L).restaurant(restaurant).name("Main Hall").build();
         RestaurantTable free = RestaurantTable.builder()
                 .id(1L).hall(hall).number("T1").capacity(4).status(TableStatus.ACTIVE).build();
@@ -162,7 +126,8 @@ class AvailabilityServiceTest {
                 .id(2L).hall(hall).number("T2").capacity(4).status(TableStatus.ACTIVE).build();
 
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(java.util.Optional.of(restaurant));
-        when(workingHoursRepository.findByRestaurantIdOrderByDayOfWeek(RESTAURANT_ID)).thenReturn(List.of(hours));
+        when(workingHoursResolver.isOpenAt(RESTAURANT_ID, TOMORROW, LocalTime.of(12, 0), LocalTime.of(13, 0)))
+                .thenReturn(true);
         when(tableRepository.findCandidatesForAvailability(eq(RESTAURANT_ID), anyInt()))
                 .thenReturn(List.of(free, booked));
         when(bookingRepository.findBookedTableIds(eq(RESTAURANT_ID), eq(TOMORROW), any(), any()))
@@ -177,13 +142,13 @@ class AvailabilityServiceTest {
     @Test
     void returnsEmptyListWhenAllCandidateTablesAreBooked() {
         Restaurant restaurant = activeRestaurant();
-        WorkingHours hours = openAllDay(restaurant);
         Hall hall = Hall.builder().id(1L).restaurant(restaurant).name("Main Hall").build();
         RestaurantTable booked = RestaurantTable.builder()
                 .id(1L).hall(hall).number("T1").capacity(4).status(TableStatus.ACTIVE).build();
 
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(java.util.Optional.of(restaurant));
-        when(workingHoursRepository.findByRestaurantIdOrderByDayOfWeek(RESTAURANT_ID)).thenReturn(List.of(hours));
+        when(workingHoursResolver.isOpenAt(RESTAURANT_ID, TOMORROW, LocalTime.of(12, 0), LocalTime.of(13, 0)))
+                .thenReturn(true);
         when(tableRepository.findCandidatesForAvailability(eq(RESTAURANT_ID), anyInt()))
                 .thenReturn(List.of(booked));
         when(bookingRepository.findBookedTableIds(eq(RESTAURANT_ID), eq(TOMORROW), any(), any()))

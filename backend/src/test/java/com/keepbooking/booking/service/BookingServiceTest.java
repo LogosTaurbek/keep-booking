@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +36,7 @@ import com.keepbooking.restaurant.model.RestaurantTable;
 import com.keepbooking.restaurant.model.TableStatus;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.restaurant.repository.TableRepository;
+import com.keepbooking.restaurant.service.WorkingHoursResolver;
 import com.keepbooking.user.model.User;
 import com.keepbooking.user.repository.UserRepository;
 
@@ -62,6 +64,8 @@ class BookingServiceTest {
     private NotificationService notificationService;
     @Mock
     private AuditLogService auditLogService;
+    @Mock
+    private WorkingHoursResolver workingHoursResolver;
 
     private BookingService bookingService;
 
@@ -71,7 +75,11 @@ class BookingServiceTest {
     @BeforeEach
     void setUp() {
         bookingService = new BookingService(bookingRepository, restaurantRepository, tableRepository,
-                userRepository, idempotencyService, notificationService, auditLogService, new SimpleMeterRegistry());
+                userRepository, idempotencyService, notificationService, auditLogService, new SimpleMeterRegistry(),
+                workingHoursResolver);
+        // Most tests aren't about opening hours - default to "always open" and let the
+        // dedicated test below override this to exercise the BOOKING_RESTAURANT_CLOSED path.
+        lenient().when(workingHoursResolver.isOpenAt(any(), any(), any(), any())).thenReturn(true);
 
         Restaurant restaurant = Restaurant.builder()
                 .id(1L)
@@ -204,6 +212,19 @@ class BookingServiceTest {
         assertThatThrownBy(() -> bookingService.create(user.getId(), request, null))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.BOOKING_GUEST_COUNT);
+    }
+
+    @Test
+    void createThrowsWhenRestaurantIsClosedAtRequestedTime() {
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(tableRepository.findById(table.getId())).thenReturn(Optional.of(table));
+        when(workingHoursResolver.isOpenAt(any(), any(), any(), any())).thenReturn(false);
+
+        assertThatThrownBy(() -> bookingService.create(user.getId(), validRequest(), null))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.BOOKING_RESTAURANT_CLOSED);
+
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test

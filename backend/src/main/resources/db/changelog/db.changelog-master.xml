@@ -19,5 +19,6 @@
     <include file="db/changelog/migrations/V012__notifications.sql"/>
     <include file="db/changelog/migrations/V013__audit_log.sql"/>
     <include file="db/changelog/migrations/V014__device_tokens.sql"/>
+    <include file="db/changelog/migrations/V015__working_hours_overrides.sql"/>
 
 </databaseChangeLog>
