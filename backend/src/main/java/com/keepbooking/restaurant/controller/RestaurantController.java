@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,6 +22,7 @@ import com.keepbooking.common.dto.PageResponse;
 import com.keepbooking.history.service.SearchHistoryService;
 import com.keepbooking.restaurant.dto.CreateRestaurantRequest;
 import com.keepbooking.restaurant.dto.RestaurantDto;
+import com.keepbooking.restaurant.dto.UpdateRestaurantRequest;
 import com.keepbooking.restaurant.service.RestaurantService;
 import com.keepbooking.user.model.User;
 
@@ -87,5 +89,15 @@ public class RestaurantController {
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<List<RestaurantDto>> getMyRestaurants(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(restaurantService.getMyRestaurants(user.getId()));
+    }
+
+    @Operation(summary = "Update a restaurant I own (partial update - only non-null fields are applied)")
+    @PatchMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<RestaurantDto> update(@AuthenticationPrincipal User user,
+                                                @PathVariable Long id,
+                                                @Valid @RequestBody UpdateRestaurantRequest request) {
+        return ResponseEntity.ok(restaurantService.update(user.getId(), id, request));
     }
 }

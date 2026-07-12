@@ -12,6 +12,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ import com.keepbooking.reference.repository.CityRepository;
 import com.keepbooking.reference.repository.CuisineRepository;
 import com.keepbooking.restaurant.dto.CreateRestaurantRequest;
 import com.keepbooking.restaurant.dto.RestaurantDto;
+import com.keepbooking.restaurant.dto.UpdateRestaurantRequest;
 import com.keepbooking.restaurant.model.Company;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.model.RestaurantStatus;
@@ -115,6 +117,36 @@ public class RestaurantService {
     public PageResponse<RestaurantDto> getByStatus(RestaurantStatus status, Pageable pageable) {
         Page<Restaurant> page = restaurantRepository.findByStatus(status, pageable);
         return PageResponse.of(page.map(this::toDto));
+    }
+
+    @Caching(evict = {
+            @CacheEvict(value = "restaurantCards", key = "#restaurantId"),
+            @CacheEvict(value = "restaurantSearch", allEntries = true)
+    })
+    @Transactional
+    public RestaurantDto update(Long userId, Long restaurantId, UpdateRestaurantRequest request) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
+        if (!restaurant.getCompany().getOwner().getId().equals(userId)) {
+            throw new AccessDeniedException("You don't own this restaurant");
+        }
+
+        if (request.getName() != null) restaurant.setName(request.getName());
+        if (request.getDescription() != null) restaurant.setDescription(request.getDescription());
+        if (request.getAddress() != null) restaurant.setAddress(request.getAddress());
+        if (request.getCityId() != null) {
+            City city = cityRepository.findById(request.getCityId()).orElse(null);
+            restaurant.setCity(city);
+        }
+        if (request.getLatitude() != null) restaurant.setLatitude(request.getLatitude());
+        if (request.getLongitude() != null) restaurant.setLongitude(request.getLongitude());
+        if (request.getTimezone() != null) restaurant.setTimezone(request.getTimezone());
+        if (request.getAvgCheck() != null) restaurant.setAvgCheck(request.getAvgCheck());
+        if (request.getCuisineIds() != null) {
+            restaurant.setCuisines(new HashSet<>(cuisineRepository.findAllById(request.getCuisineIds())));
+        }
+
+        return toDto(restaurantRepository.save(restaurant));
     }
 
     @Caching(evict = {

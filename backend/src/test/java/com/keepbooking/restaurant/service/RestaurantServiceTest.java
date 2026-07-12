@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
@@ -22,6 +23,7 @@ import com.keepbooking.reference.repository.CityRepository;
 import com.keepbooking.reference.repository.CuisineRepository;
 import com.keepbooking.restaurant.dto.CreateRestaurantRequest;
 import com.keepbooking.restaurant.dto.RestaurantDto;
+import com.keepbooking.restaurant.dto.UpdateRestaurantRequest;
 import com.keepbooking.restaurant.model.Company;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.model.RestaurantStatus;
@@ -164,5 +166,38 @@ class RestaurantServiceTest {
         RestaurantDto dto = restaurantService.moderate(RESTAURANT_ID, RestaurantStatus.BLOCKED);
 
         assertThat(dto.getStatus()).isEqualTo(RestaurantStatus.BLOCKED);
+    }
+
+    @Test
+    void updateThrowsWhenRestaurantNotFound() {
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> restaurantService.update(OWNER_ID, RESTAURANT_ID, new UpdateRestaurantRequest()))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.RESTAURANT_NOT_FOUND);
+    }
+
+    @Test
+    void updateThrowsAccessDeniedWhenActorDoesNotOwnTheRestaurant() {
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
+
+        assertThatThrownBy(() -> restaurantService.update(999L, RESTAURANT_ID, new UpdateRestaurantRequest()))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void updateAppliesOnlyNonNullFields() {
+        Restaurant restaurant = restaurant();
+        restaurant.setDescription("Old description");
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
+        when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UpdateRestaurantRequest request = new UpdateRestaurantRequest();
+        request.setName("Renamed Restaurant");
+
+        RestaurantDto dto = restaurantService.update(OWNER_ID, RESTAURANT_ID, request);
+
+        assertThat(dto.getName()).isEqualTo("Renamed Restaurant");
+        assertThat(dto.getDescription()).isEqualTo("Old description");
     }
 }
