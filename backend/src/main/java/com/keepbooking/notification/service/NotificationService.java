@@ -1,7 +1,5 @@
 package com.keepbooking.notification.service;
 
-import java.util.Map;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -13,7 +11,9 @@ import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
 import com.keepbooking.notification.dto.NotificationDto;
 import com.keepbooking.notification.model.Notification;
+import com.keepbooking.notification.model.NotificationOutbox;
 import com.keepbooking.notification.model.NotificationType;
+import com.keepbooking.notification.repository.NotificationOutboxRepository;
 import com.keepbooking.notification.repository.NotificationRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -23,8 +23,14 @@ import lombok.RequiredArgsConstructor;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final PushNotificationService pushNotificationService;
+    private final NotificationOutboxRepository notificationOutboxRepository;
 
+    /**
+     * Saves the in-app notification directly (a local DB write, no external dependency) and
+     * queues push delivery via the transactional outbox (tz2.txt §14): the outbox row commits
+     * atomically with this method's caller (booking status change), and a separate worker
+     * ({@link NotificationOutboxWorker}) delivers it with retries, independent of this request.
+     */
     @Transactional
     public void notifyBookingStatusChange(Booking booking, NotificationType type, String title, String message) {
         Notification notification = Notification.builder()
@@ -36,8 +42,13 @@ public class NotificationService {
                 .build();
         notificationRepository.save(notification);
 
-        pushNotificationService.send(booking.getUser().getId(), title, message,
-                Map.of("type", type.name(), "bookingId", booking.getId().toString()));
+        notificationOutboxRepository.save(NotificationOutbox.builder()
+                .user(booking.getUser())
+                .booking(booking)
+                .type(type)
+                .title(title)
+                .message(message)
+                .build());
     }
 
     @Transactional(readOnly = true)

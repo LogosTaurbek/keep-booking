@@ -3,9 +3,6 @@ package com.keepbooking.notification.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -23,7 +20,9 @@ import com.keepbooking.booking.model.Booking;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
 import com.keepbooking.notification.model.Notification;
+import com.keepbooking.notification.model.NotificationOutbox;
 import com.keepbooking.notification.model.NotificationType;
+import com.keepbooking.notification.repository.NotificationOutboxRepository;
 import com.keepbooking.notification.repository.NotificationRepository;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.user.model.User;
@@ -35,7 +34,7 @@ class NotificationServiceTest {
     private NotificationRepository notificationRepository;
 
     @Mock
-    private PushNotificationService pushNotificationService;
+    private NotificationOutboxRepository notificationOutboxRepository;
 
     private NotificationService notificationService;
 
@@ -45,7 +44,7 @@ class NotificationServiceTest {
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationService(notificationRepository, pushNotificationService);
+        notificationService = new NotificationService(notificationRepository, notificationOutboxRepository);
     }
 
     private User user(Long id) {
@@ -58,7 +57,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    void notifyBookingStatusChangeSavesNotificationForBookingOwner() {
+    void notifyBookingStatusChangeSavesNotificationAndQueuesOutboxEvent() {
         User owner = user(USER_ID);
         Booking booking = Booking.builder().id(1L).user(owner)
                 .restaurant(Restaurant.builder().id(1L).build()).build();
@@ -66,7 +65,7 @@ class NotificationServiceTest {
         notificationService.notifyBookingStatusChange(booking, NotificationType.BOOKING_CONFIRMED, "Confirmed", "Your booking is confirmed");
 
         verify(notificationRepository).save(any(Notification.class));
-        verify(pushNotificationService).send(eq(USER_ID), anyString(), anyString(), anyMap());
+        verify(notificationOutboxRepository).save(any(NotificationOutbox.class));
     }
 
     @Test

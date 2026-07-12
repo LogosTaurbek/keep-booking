@@ -19,20 +19,25 @@ import com.keepbooking.notification.model.DeviceToken;
 import com.keepbooking.notification.repository.DeviceTokenRepository;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 // FirebaseMessaging bean only exists when app.firebase.enabled=true (see FirebaseConfig) — everywhere
 // else this degrades to a no-op so in-app notifications keep working without FCM credentials.
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PushNotificationService {
 
     private final DeviceTokenRepository deviceTokenRepository;
     private final Optional<FirebaseMessaging> firebaseMessaging;
+    private final FirebaseMessageSender firebaseMessageSender;
 
+    /**
+     * Throws {@link FirebaseMessagingException} if the whole batch call fails (after
+     * {@code @Retry} on {@link FirebaseMessageSender} is exhausted) so the caller - the
+     * notification outbox worker - can schedule a later retry / dead-letter it, instead of the
+     * failure being silently swallowed here.
+     */
     @Transactional
-    public void send(Long userId, String title, String body, Map<String, String> data) {
+    public void send(Long userId, String title, String body, Map<String, String> data) throws FirebaseMessagingException {
         if (firebaseMessaging.isEmpty()) {
             return;
         }
@@ -48,13 +53,9 @@ public class PushNotificationService {
                 .addAllTokens(tokens.stream().map(DeviceToken::getToken).toList())
                 .build();
 
-        try {
-            BatchResponse response = firebaseMessaging.get().sendEachForMulticast(message);
-            if (response.getFailureCount() > 0) {
-                removeUnregisteredTokens(tokens, response.getResponses());
-            }
-        } catch (FirebaseMessagingException e) {
-            log.warn("Failed to send push notification batch for user {}", userId, e);
+        BatchResponse response = firebaseMessageSender.send(firebaseMessaging.get(), message);
+        if (response.getFailureCount() > 0) {
+            removeUnregisteredTokens(tokens, response.getResponses());
         }
     }
 
