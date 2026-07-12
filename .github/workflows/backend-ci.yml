@@ -111,10 +111,15 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # The NVD feed (with a working API key) downloads and parses fast enough to actually run
+      # into memory pressure - Gradle's default daemon heap (512 MiB) OOMs partway through
+      # (java.lang.OutOfMemoryError: Java heap space in the httpclient response consumer). This
+      # analysis is memory-hungry regardless of the key, so give it more room only for this job -
+      # no need to raise the default for `./gradlew build` or local dev, which never hit this path.
       - name: OWASP Dependency-Check
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-        run: ./gradlew dependencyCheckAnalyze
+        run: ./gradlew dependencyCheckAnalyze -Dorg.gradle.jvmargs=-Xmx4g
 
       - name: Upload dependency-check report
         if: always()
