@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <suppress>
+        <notes><![CDATA[
+            CVE-2026-53914 ("code execution via unsafe deserialization in the build cache
+            metadata") is about JetBrains Kotlin's compiler/Gradle-plugin build-cache mechanism -
+            a build-time attack surface. kotlin-stdlib here is a transitive *runtime* dependency
+            (pulled in by okhttp -> okio, itself pulled in by the OTLP/Firebase SDKs), never
+            invoked as part of any Kotlin build tooling in this project (build.gradle is Groovy,
+            not Kotlin DSL). JetBrains' own CVSS assessment (6.7, local/high-privilege access) is
+            consistent with this; NIST's 9.8 reflects the build-tooling scenario this deployment
+            never exercises. Confirmed against the NVD record on 2026-07-13.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.jetbrains\.kotlin/kotlin\-stdlib.*@.*$</packageUrl>
+        <cve>CVE-2026-53914</cve>
+    </suppress>
+</suppressions>

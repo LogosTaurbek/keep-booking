@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.3'
+    id 'org.springframework.boot' version '3.5.16'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'jacoco'
     id 'checkstyle'
@@ -102,6 +102,7 @@ check.dependsOn jacocoTestCoverageVerification
 // block comment). NVD_API_KEY, if set, speeds up and stabilizes the NVD feed download.
 dependencyCheck {
     failBuildOnCVSS = 9
+    suppressionFile = 'config/dependency-check/suppressions.xml'
     nvd {
         apiKey = System.getenv('NVD_API_KEY')
     }
@@ -123,6 +124,12 @@ ext {
 dependencyManagement {
     imports {
         mavenBom "software.amazon.awssdk:bom:${awsSdkVersion}"
+        // Netty is pulled in transitively (AWS SDK's netty-nio-client) at a version predating
+        // several CVEs disclosed after Spring Boot 3.5's release (CVE-2026-45674/47691: DNS cache
+        // poisoning via unvalidated CNAME/NS record bailiwick in DnsResolveContext, both CVSS 10.0;
+        // CVE-2026-42581: HTTP/1.0 request smuggling via conflicting Transfer-Encoding/Content-
+        // Length). 4.1.136.Final is the latest 4.1.x (patch-compatible) release fixing all three.
+        mavenBom "io.netty:netty-bom:4.1.136.Final"
     }
     dependencies {
         // Spring Boot's BOM pins commons-lang3 (a transitive dependency only - nothing here
@@ -131,6 +138,12 @@ dependencyManagement {
         // This override applies project-wide via Spring's own managed-version mechanism, which
         // a plain resolutionStrategy.force on just the spotbugs configuration didn't win against.
         dependency 'org.apache.commons:commons-lang3:3.20.0'
+
+        // Spring Boot 3.5.16's own managed Tomcat (10.1.55) is one patch release behind
+        // CVE-2026-55276's fix (10.1.56) - narrow real-world impact (an authorization-constraint
+        // logging accuracy issue, not a direct injection/RCE) but cheap and safe to close outright.
+        dependency 'org.apache.tomcat.embed:tomcat-embed-core:10.1.57'
+        dependency 'org.apache.tomcat.embed:tomcat-embed-websocket:10.1.57'
     }
 }
 
