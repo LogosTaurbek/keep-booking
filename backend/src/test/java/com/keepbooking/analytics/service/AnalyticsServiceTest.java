@@ -19,7 +19,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 
 import com.keepbooking.analytics.dto.RestaurantAnalyticsDto;
-import com.keepbooking.booking.model.BookingStatus;
+import com.keepbooking.analytics.repository.RestaurantDailyHourStatsRepository;
+import com.keepbooking.analytics.repository.RestaurantDailyStatsRepository;
+import com.keepbooking.analytics.repository.RestaurantDailyTableStatsRepository;
 import com.keepbooking.booking.repository.BookingRepository;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
@@ -28,6 +30,11 @@ import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.user.model.User;
 
+/**
+ * tz2.txt §15/§25: AnalyticsService reads from the daily-rollup read model (status sums, hour/
+ * table breakdowns), not the live bookings table - AnalyticsRefreshWorkerTest covers how those
+ * rollups themselves get populated.
+ */
 @ExtendWith(MockitoExtension.class)
 class AnalyticsServiceTest {
 
@@ -35,6 +42,12 @@ class AnalyticsServiceTest {
     private RestaurantRepository restaurantRepository;
     @Mock
     private BookingRepository bookingRepository;
+    @Mock
+    private RestaurantDailyStatsRepository dailyStatsRepository;
+    @Mock
+    private RestaurantDailyHourStatsRepository hourStatsRepository;
+    @Mock
+    private RestaurantDailyTableStatsRepository tableStatsRepository;
 
     private AnalyticsService analyticsService;
 
@@ -46,7 +59,8 @@ class AnalyticsServiceTest {
 
     @BeforeEach
     void setUp() {
-        analyticsService = new AnalyticsService(restaurantRepository, bookingRepository);
+        analyticsService = new AnalyticsService(restaurantRepository, bookingRepository,
+                dailyStatsRepository, hourStatsRepository, tableStatsRepository);
     }
 
     private Restaurant restaurantOwnedBy(Long ownerId) {
@@ -83,17 +97,12 @@ class AnalyticsServiceTest {
     @Test
     void aggregatesStatusCountsAndComputesConfirmationRate() {
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
-        when(bookingRepository.countByStatusForRestaurant(eq(RESTAURANT_ID), eq(FROM), eq(TO))).thenReturn(List.of(
-                new Object[]{BookingStatus.PENDING, 2L},
-                new Object[]{BookingStatus.CONFIRMED, 3L},
-                new Object[]{BookingStatus.REJECTED, 1L},
-                new Object[]{BookingStatus.CANCELLED, 1L},
-                new Object[]{BookingStatus.COMPLETED, 4L},
-                new Object[]{BookingStatus.NO_SHOW, 1L}
-        ));
-        when(bookingRepository.findPopularHours(eq(RESTAURANT_ID), eq(FROM), eq(TO), any(Pageable.class)))
+        // pending, confirmed, rejected, cancelled, completed, noShow
+        when(dailyStatsRepository.sumStatusCounts(eq(RESTAURANT_ID), eq(FROM), eq(TO)))
+                .thenReturn(List.<Object[]>of(new Object[]{2L, 3L, 1L, 1L, 4L, 1L}));
+        when(hourStatsRepository.findPopularHours(eq(RESTAURANT_ID), eq(FROM), eq(TO), any(Pageable.class)))
                 .thenReturn(List.of(new Object[]{19, 5L}, new Object[]{20, 3L}));
-        when(bookingRepository.findPopularTables(eq(RESTAURANT_ID), eq(FROM), eq(TO), any(Pageable.class)))
+        when(tableStatsRepository.findPopularTables(eq(RESTAURANT_ID), eq(FROM), eq(TO), any(Pageable.class)))
                 .thenReturn(List.<Object[]>of(new Object[]{100L, "A1", 4L}));
         when(bookingRepository.countDistinctGuestsForRestaurant(RESTAURANT_ID, FROM, TO)).thenReturn(9L);
 
@@ -119,11 +128,11 @@ class AnalyticsServiceTest {
     @Test
     void confirmationRateIsZeroWhenAllBookingsAreStillPending() {
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
-        when(bookingRepository.countByStatusForRestaurant(eq(RESTAURANT_ID), eq(FROM), eq(TO)))
-                .thenReturn(List.<Object[]>of(new Object[]{BookingStatus.PENDING, 5L}));
-        when(bookingRepository.findPopularHours(eq(RESTAURANT_ID), eq(FROM), eq(TO), any(Pageable.class)))
+        when(dailyStatsRepository.sumStatusCounts(eq(RESTAURANT_ID), eq(FROM), eq(TO)))
+                .thenReturn(List.<Object[]>of(new Object[]{5L, 0L, 0L, 0L, 0L, 0L}));
+        when(hourStatsRepository.findPopularHours(eq(RESTAURANT_ID), eq(FROM), eq(TO), any(Pageable.class)))
                 .thenReturn(List.of());
-        when(bookingRepository.findPopularTables(eq(RESTAURANT_ID), eq(FROM), eq(TO), any(Pageable.class)))
+        when(tableStatsRepository.findPopularTables(eq(RESTAURANT_ID), eq(FROM), eq(TO), any(Pageable.class)))
                 .thenReturn(List.of());
         when(bookingRepository.countDistinctGuestsForRestaurant(RESTAURANT_ID, FROM, TO)).thenReturn(3L);
 

@@ -2,6 +2,18 @@
 
 Формат по мотивам [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/). Версий/тегов пока нет — записи сгруппированы по дате.
 
+## [Unreleased] — 2026-07-13
+
+### Added — Read-модель для аналитики ресторана (tz2.txt §15/§25 этап 3)
+- Три новые таблицы-роллапа по дням (миграция V018): `restaurant_daily_stats` (счётчики по статусам брони), `restaurant_daily_hour_stats` (популярные часы), `restaurant_daily_table_stats` (популярные столики) — плюс `analytics_refresh_state`, однострочная таблица-watermark
+- `AnalyticsRefreshWorker` (`@Scheduled`, по умолчанию каждые 15 мин) — вместо полного пересчёта каждый цикл находит только (restaurant_id, booking_date) пары, затронутые записью брони с прошлого цикла (`Booking.updatedAt > watermark`, простановка `updatedAt` уже была через JPA-аудит), и пересчитывает точечно только их. Час/стол-роллапы за пересчитываемый день просто удаляются и вставляются заново — проще и корректнее, чем построчный upsert, и достаточно дёшево на этой гранулярности
+- `AnalyticsService.getRestaurantAnalytics()` теперь суммирует roll-up-строки за диапазон дат вместо прямого агрегирующего скана по `bookings` на каждый запрос — статус/час/стол-разбивки теперь читаются из маленьких предпосчитанных таблиц. Подсчёт уникальных гостей сознательно оставлен как есть (живой `COUNT(DISTINCT)`) — точный distinct-count по диапазону не восстановить из посуточных роллапов без sketch-структуры, а этот единственный индексированный запрос никогда не был узким местом
+- `AnalyticsRefreshWorkerTest` (3 unit-теста) — ничего не делает и просто продвигает watermark, когда нечего пересчитывать; апсертит (не дублирует) существующую строку статистики; `AnalyticsServiceTest` переписан под чтение из read-model репозиториев вместо `BookingRepository`
+- Устаревшие range-scoped агрегирующие запросы (`countByStatusForRestaurant`, `findPopularHours`, `findPopularTables`) удалены из `BookingRepository` — использовались только старой реализацией `AnalyticsService`; добавлены day-scoped версии для воркера и запрос "грязных" пар `findDirtyRestaurantDatesSince`
+- По пути поймано и исправлено 2 бага в первой версии миграции/запроса (найдено на живом прогоне, не в юнит-тестах, которые мокают репозитории): (1) таблицы `restaurant_daily_hour_stats`/`restaurant_daily_table_stats` не имели колонок `created_at`/`updated_at`, а Java-модели наследуют `BaseEntity`, которому они обязательны — Hibernate `ddl-auto: validate` падал при старте; (2) `sumStatusCounts` был объявлен как `Object[]` вместо `List<Object[]>` (в отличие от всех остальных multi-column агрегатов в проекте) — Spring Data JPA в этом случае не разворачивает строку результата, и `sums[0]` оказывался не `Number`, а всей строкой целиком (`ClassCastException`)
+- Заодно исправлен случайно обнаруженный flaky-тест: `BookingServiceTest.createThrowsWhenBookingDateTimeIsInThePast` брал `LocalDate.now()` + `LocalTime.MIN..MIN+30мин`, что перестаёт быть "прошлым" в первые полчаса каждых суток — поймано ровно на смене даты во время сессии, заменено на `LocalDate.now().minusDays(1)` (гарантированно в прошлом независимо от времени запуска)
+- Проверено вживую: полный цикл (создание брони → подтверждение/отклонение → ожидание цикла воркера → сверка значений в `restaurant_daily_*_stats` с БД напрямую → запрос `GET /analytics` возвращает те же цифры)
+
 ## [Unreleased] — 2026-07-12
 
 ### Added — CI: Checkstyle, SpotBugs, JaCoCo, OWASP Dependency-Check (tz2.txt §21-22)

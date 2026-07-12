@@ -65,15 +65,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
                                   @Param("timeTo") LocalTime timeTo);
 
     @Query("""
-            SELECT b.status, COUNT(b) FROM Booking b
-            WHERE b.restaurant.id = :restaurantId AND b.bookingDate BETWEEN :from AND :to
-            GROUP BY b.status
-            """)
-    List<Object[]> countByStatusForRestaurant(@Param("restaurantId") Long restaurantId,
-                                              @Param("from") LocalDate from,
-                                              @Param("to") LocalDate to);
-
-    @Query("""
             SELECT COUNT(DISTINCT b.user.id) FROM Booking b
             WHERE b.restaurant.id = :restaurantId AND b.bookingDate BETWEEN :from AND :to
             """)
@@ -81,25 +72,37 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
                                           @Param("from") LocalDate from,
                                           @Param("to") LocalDate to);
 
-    @Query("""
-            SELECT extract(HOUR FROM b.timeFrom), COUNT(b) FROM Booking b
-            WHERE b.restaurant.id = :restaurantId AND b.bookingDate BETWEEN :from AND :to
-            GROUP BY extract(HOUR FROM b.timeFrom)
-            ORDER BY COUNT(b) DESC
-            """)
-    List<Object[]> findPopularHours(@Param("restaurantId") Long restaurantId,
-                                    @Param("from") LocalDate from,
-                                    @Param("to") LocalDate to,
-                                    Pageable pageable);
+    // --- Analytics read-model refresh (tz2.txt §15/§25): AnalyticsRefreshWorker re-aggregates
+    // exactly the (restaurant, date) pairs touched since the last cycle into the
+    // restaurant_daily_*_stats tables; AnalyticsService reads those, not this table directly. ---
 
     @Query("""
-            SELECT b.table.id, b.table.number, COUNT(b) FROM Booking b
-            WHERE b.restaurant.id = :restaurantId AND b.bookingDate BETWEEN :from AND :to
-            GROUP BY b.table.id, b.table.number
-            ORDER BY COUNT(b) DESC
+            SELECT DISTINCT b.restaurant.id, b.bookingDate FROM Booking b
+            WHERE b.updatedAt > :since
             """)
-    List<Object[]> findPopularTables(@Param("restaurantId") Long restaurantId,
-                                     @Param("from") LocalDate from,
-                                     @Param("to") LocalDate to,
-                                     Pageable pageable);
+    List<Object[]> findDirtyRestaurantDatesSince(@Param("since") Instant since);
+
+    @Query("""
+            SELECT b.status, COUNT(b) FROM Booking b
+            WHERE b.restaurant.id = :restaurantId AND b.bookingDate = :date
+            GROUP BY b.status
+            """)
+    List<Object[]> countByStatusForRestaurantAndDate(@Param("restaurantId") Long restaurantId,
+                                                      @Param("date") LocalDate date);
+
+    @Query("""
+            SELECT extract(HOUR FROM b.timeFrom), COUNT(b) FROM Booking b
+            WHERE b.restaurant.id = :restaurantId AND b.bookingDate = :date
+            GROUP BY extract(HOUR FROM b.timeFrom)
+            """)
+    List<Object[]> countByHourForRestaurantAndDate(@Param("restaurantId") Long restaurantId,
+                                                    @Param("date") LocalDate date);
+
+    @Query("""
+            SELECT b.table.id, COUNT(b) FROM Booking b
+            WHERE b.restaurant.id = :restaurantId AND b.bookingDate = :date
+            GROUP BY b.table.id
+            """)
+    List<Object[]> countByTableForRestaurantAndDate(@Param("restaurantId") Long restaurantId,
+                                                     @Param("date") LocalDate date);
 }

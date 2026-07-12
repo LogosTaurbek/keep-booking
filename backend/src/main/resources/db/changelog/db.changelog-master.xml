@@ -22,5 +22,6 @@
     <include file="db/changelog/migrations/V015__working_hours_overrides.sql"/>
     <include file="db/changelog/migrations/V016__notification_outbox.sql"/>
     <include file="db/changelog/migrations/V017__waitlist.sql"/>
+    <include file="db/changelog/migrations/V018__analytics_read_model.sql"/>
 
 </databaseChangeLog>

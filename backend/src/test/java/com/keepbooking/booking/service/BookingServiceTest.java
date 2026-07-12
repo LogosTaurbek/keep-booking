@@ -211,8 +211,11 @@ class BookingServiceTest {
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
         when(tableRepository.findById(table.getId())).thenReturn(Optional.of(table));
 
+        // Yesterday, not "today at 00:00" - the latter is only in the past once the wall clock
+        // passes 00:30 UTC, making this test flaky for the first half hour of every day (it did
+        // flake: NPE from an unstubbed save() once validation unexpectedly let the booking through).
         CreateBookingRequest request = validRequest();
-        request.setBookingDate(LocalDate.now());
+        request.setBookingDate(LocalDate.now().minusDays(1));
         request.setTimeFrom(LocalTime.MIN);
         request.setTimeTo(LocalTime.MIN.plusMinutes(30));
 

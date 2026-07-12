@@ -72,6 +72,8 @@ app:
     credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
   notification:
     outbox-interval-ms: ${NOTIFICATION_OUTBOX_INTERVAL_MS:30000}
+  analytics:
+    refresh-interval-ms: ${ANALYTICS_REFRESH_INTERVAL_MS:900000}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     general-limit: ${RATE_LIMIT_GENERAL:100}

@@ -2,8 +2,6 @@ package com.keepbooking.analytics.service;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
@@ -13,7 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.keepbooking.analytics.dto.HourCountDto;
 import com.keepbooking.analytics.dto.RestaurantAnalyticsDto;
 import com.keepbooking.analytics.dto.TableCountDto;
-import com.keepbooking.booking.model.BookingStatus;
+import com.keepbooking.analytics.repository.RestaurantDailyHourStatsRepository;
+import com.keepbooking.analytics.repository.RestaurantDailyStatsRepository;
+import com.keepbooking.analytics.repository.RestaurantDailyTableStatsRepository;
 import com.keepbooking.booking.repository.BookingRepository;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
@@ -22,6 +22,14 @@ import com.keepbooking.restaurant.repository.RestaurantRepository;
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Reads from the analytics read model (tz2.txt §15/§25) kept fresh by
+ * {@link AnalyticsRefreshWorker} - status/hour/table breakdowns are small per-day rollups summed
+ * over the requested range, not a scan over every individual booking. Unique-guest count is the
+ * one exception: it stays a live {@code COUNT(DISTINCT)} query, since an accurate distinct count
+ * isn't reconstructable from daily rollups without a sketch structure, and that single indexed
+ * aggregate was never the expensive part of the original implementation.
+ */
 @Service
 @RequiredArgsConstructor
 public class AnalyticsService {
@@ -30,6 +38,9 @@ public class AnalyticsService {
 
     private final RestaurantRepository restaurantRepository;
     private final BookingRepository bookingRepository;
+    private final RestaurantDailyStatsRepository dailyStatsRepository;
+    private final RestaurantDailyHourStatsRepository hourStatsRepository;
+    private final RestaurantDailyTableStatsRepository tableStatsRepository;
 
     @Transactional(readOnly = true)
     public RestaurantAnalyticsDto getRestaurantAnalytics(Long userId, Long restaurantId, LocalDate from, LocalDate to) {
@@ -42,27 +53,27 @@ public class AnalyticsService {
             throw new ApiException(ErrorCode.VALIDATION_ERROR, "'from' must not be after 'to'");
         }
 
-        Map<BookingStatus, Long> byStatus = bookingRepository.countByStatusForRestaurant(restaurantId, from, to).stream()
-                .collect(Collectors.toMap(row -> (BookingStatus) row[0], row -> (Long) row[1]));
-
-        long pending = byStatus.getOrDefault(BookingStatus.PENDING, 0L);
-        long confirmed = byStatus.getOrDefault(BookingStatus.CONFIRMED, 0L);
-        long rejected = byStatus.getOrDefault(BookingStatus.REJECTED, 0L);
-        long cancelled = byStatus.getOrDefault(BookingStatus.CANCELLED, 0L);
-        long completed = byStatus.getOrDefault(BookingStatus.COMPLETED, 0L);
-        long noShow = byStatus.getOrDefault(BookingStatus.NO_SHOW, 0L);
+        // An aggregate query with no GROUP BY always returns exactly one row (COALESCE covers the
+        // no-matching-data case with zeros), so .get(0) is safe.
+        Object[] sums = dailyStatsRepository.sumStatusCounts(restaurantId, from, to).get(0);
+        long pending = ((Number) sums[0]).longValue();
+        long confirmed = ((Number) sums[1]).longValue();
+        long rejected = ((Number) sums[2]).longValue();
+        long cancelled = ((Number) sums[3]).longValue();
+        long completed = ((Number) sums[4]).longValue();
+        long noShow = ((Number) sums[5]).longValue();
         long total = pending + confirmed + rejected + cancelled + completed + noShow;
 
         long leftPending = total - pending;
         double confirmationRate = leftPending == 0 ? 0.0
                 : (double) (confirmed + completed + noShow) / leftPending;
 
-        List<HourCountDto> popularHours = bookingRepository
+        List<HourCountDto> popularHours = hourStatsRepository
                 .findPopularHours(restaurantId, from, to, PageRequest.of(0, TOP_N)).stream()
                 .map(row -> new HourCountDto(((Number) row[0]).intValue(), (Long) row[1]))
                 .toList();
 
-        List<TableCountDto> popularTables = bookingRepository
+        List<TableCountDto> popularTables = tableStatsRepository
                 .findPopularTables(restaurantId, from, to, PageRequest.of(0, TOP_N)).stream()
                 .map(row -> new TableCountDto((Long) row[0], (String) row[1], (Long) row[2]))
                 .toList();
