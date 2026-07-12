@@ -159,4 +159,62 @@ class AvailabilityServiceTest {
 
         assertThat(available).isEmpty();
     }
+
+    @Test
+    void hasFreeTablesNowReturnsFalseWhenRestaurantNotActive() {
+        Restaurant restaurant = activeRestaurant();
+        restaurant.setStatus(RestaurantStatus.DRAFT);
+
+        assertThat(availabilityService.hasFreeTablesNow(restaurant, 2)).isFalse();
+    }
+
+    @Test
+    void hasFreeTablesNowReturnsFalseWhenClosedNow() {
+        Restaurant restaurant = activeRestaurant();
+        when(workingHoursResolver.isOpenAt(eq(RESTAURANT_ID), any(), any(), any())).thenReturn(false);
+
+        assertThat(availabilityService.hasFreeTablesNow(restaurant, 2)).isFalse();
+    }
+
+    @Test
+    void hasFreeTablesNowReturnsFalseWhenNoCandidateTables() {
+        Restaurant restaurant = activeRestaurant();
+        when(workingHoursResolver.isOpenAt(eq(RESTAURANT_ID), any(), any(), any())).thenReturn(true);
+        when(tableRepository.findCandidatesForAvailability(eq(RESTAURANT_ID), anyInt())).thenReturn(List.of());
+
+        assertThat(availabilityService.hasFreeTablesNow(restaurant, 2)).isFalse();
+    }
+
+    @Test
+    void hasFreeTablesNowReturnsFalseWhenAllCandidatesAreBooked() {
+        Restaurant restaurant = activeRestaurant();
+        Hall hall = Hall.builder().id(1L).restaurant(restaurant).name("Main Hall").build();
+        RestaurantTable booked = RestaurantTable.builder()
+                .id(1L).hall(hall).number("T1").capacity(4).status(TableStatus.ACTIVE).build();
+
+        when(workingHoursResolver.isOpenAt(eq(RESTAURANT_ID), any(), any(), any())).thenReturn(true);
+        when(tableRepository.findCandidatesForAvailability(eq(RESTAURANT_ID), anyInt())).thenReturn(List.of(booked));
+        when(bookingRepository.findBookedTableIds(eq(RESTAURANT_ID), any(), any(), any()))
+                .thenReturn(List.of(booked.getId()));
+
+        assertThat(availabilityService.hasFreeTablesNow(restaurant, 2)).isFalse();
+    }
+
+    @Test
+    void hasFreeTablesNowReturnsTrueWhenAtLeastOneCandidateIsFree() {
+        Restaurant restaurant = activeRestaurant();
+        Hall hall = Hall.builder().id(1L).restaurant(restaurant).name("Main Hall").build();
+        RestaurantTable free = RestaurantTable.builder()
+                .id(1L).hall(hall).number("T1").capacity(4).status(TableStatus.ACTIVE).build();
+        RestaurantTable booked = RestaurantTable.builder()
+                .id(2L).hall(hall).number("T2").capacity(4).status(TableStatus.ACTIVE).build();
+
+        when(workingHoursResolver.isOpenAt(eq(RESTAURANT_ID), any(), any(), any())).thenReturn(true);
+        when(tableRepository.findCandidatesForAvailability(eq(RESTAURANT_ID), anyInt()))
+                .thenReturn(List.of(free, booked));
+        when(bookingRepository.findBookedTableIds(eq(RESTAURANT_ID), any(), any(), any()))
+                .thenReturn(List.of(booked.getId()));
+
+        assertThat(availabilityService.hasFreeTablesNow(restaurant, 2)).isTrue();
+    }
 }

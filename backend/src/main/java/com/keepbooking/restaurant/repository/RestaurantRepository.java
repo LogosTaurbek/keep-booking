@@ -1,5 +1,6 @@
 package com.keepbooking.restaurant.repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,4 +47,16 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long>, J
             nativeQuery = true)
     Page<Restaurant> findNearby(@Param("lat") double lat, @Param("lng") double lng,
                                  @Param("radiusMeters") double radiusMeters, Pageable pageable);
+
+    // Plain range filter for a map viewport (JPQL BETWEEN excludes NULL lat/lng implicitly),
+    // no earthdistance extension needed since a bounding box has no radius to approximate.
+    @Query("""
+            SELECT r FROM Restaurant r
+            WHERE r.status = 'ACTIVE'
+              AND r.latitude BETWEEN :minLat AND :maxLat
+              AND r.longitude BETWEEN :minLng AND :maxLng
+            """)
+    Page<Restaurant> findInBoundingBox(@Param("minLat") BigDecimal minLat, @Param("maxLat") BigDecimal maxLat,
+                                        @Param("minLng") BigDecimal minLng, @Param("maxLng") BigDecimal maxLng,
+                                        Pageable pageable);
 }

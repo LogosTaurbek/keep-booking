@@ -26,6 +26,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AvailabilityService {
 
+    // Map pins need a cheap "can I walk in right now" signal, not a real booking window;
+    // 30 minutes approximates the shortest sensible slot without a per-restaurant slotDuration setting (tz2.txt §10.1, not modeled yet).
+    private static final int FREE_NOW_WINDOW_MINUTES = 30;
+
     private final RestaurantRepository restaurantRepository;
     private final WorkingHoursResolver workingHoursResolver;
     private final TableRepository tableRepository;
@@ -51,6 +55,35 @@ public class AvailabilityService {
                 .filter(t -> !bookedTableIds.contains(t.getId()))
                 .map(this::toDto)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasFreeTablesNow(Restaurant restaurant, int guests) {
+        if (restaurant.getStatus() != RestaurantStatus.ACTIVE) {
+            return false;
+        }
+
+        LocalDateTime nowLocal = LocalDateTime.now(ZoneId.of(restaurant.getTimezone()));
+        LocalDate date = nowLocal.toLocalDate();
+        LocalTime from = nowLocal.toLocalTime();
+        LocalTime to = from.plusMinutes(FREE_NOW_WINDOW_MINUTES);
+        if (!to.isAfter(from)) {
+            // window wrapped past midnight - clamp to end-of-day rather than spilling into tomorrow's schedule
+            to = LocalTime.MAX;
+        }
+
+        if (!workingHoursResolver.isOpenAt(restaurant.getId(), date, from, to)) {
+            return false;
+        }
+
+        List<RestaurantTable> candidates = tableRepository.findCandidatesForAvailability(restaurant.getId(), guests);
+        if (candidates.isEmpty()) {
+            return false;
+        }
+
+        Set<Long> bookedTableIds = Set.copyOf(
+                bookingRepository.findBookedTableIds(restaurant.getId(), date, from, to));
+        return candidates.stream().anyMatch(t -> !bookedTableIds.contains(t.getId()));
     }
 
     private void validateTimeRange(LocalDate date, LocalTime from, LocalTime to, String restaurantTimezone) {
