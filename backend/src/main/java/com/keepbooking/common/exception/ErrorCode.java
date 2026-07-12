@@ -71,4 +71,13 @@ public enum ErrorCode {
     private final String code;
     private final String defaultMessage;
     private final HttpStatus httpStatus;
+
+    /**
+     * RFC 7807 "type" - a stable, deterministic URI derived from the enum constant name
+     * (e.g. TABLE_NOT_AVAILABLE -> .../errors/table-not-available), not a real dereferenceable
+     * document, but a documented, code-stable identifier for the error kind.
+     */
+    public String getTypeUri() {
+        return "https://keepbooking.dev/errors/" + name().toLowerCase().replace('_', '-');
+    }
 }
