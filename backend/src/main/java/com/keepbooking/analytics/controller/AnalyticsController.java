@@ -25,13 +25,13 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/v1/restaurants/{restaurantId}/analytics")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasAnyRole('RESTAURANT_ADMIN', 'COMPANY_ADMIN', 'SUPER_ADMIN')")
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
 
     @Operation(summary = "Bookings, cancellations, popular hours/tables and unique guests for a date range")
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<RestaurantAnalyticsDto> getAnalytics(
             @AuthenticationPrincipal User user,
             @PathVariable Long restaurantId,

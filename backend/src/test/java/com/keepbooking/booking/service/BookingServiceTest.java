@@ -303,7 +303,7 @@ class BookingServiceTest {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest();
         request.setStatus(BookingStatus.CONFIRMED);
 
-        assertThatThrownBy(() -> bookingService.updateStatus(1L, user.getId(), request, true))
+        assertThatThrownBy(() -> bookingService.updateStatus(1L, user.getId(), request))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.BOOKING_NOT_FOUND);
     }
@@ -317,7 +317,7 @@ class BookingServiceTest {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest();
         request.setStatus(BookingStatus.CANCELLED);
 
-        assertThatThrownBy(() -> bookingService.updateStatus(1L, 999L, request, false))
+        assertThatThrownBy(() -> bookingService.updateStatus(1L, 999L, request))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.ACCESS_DENIED);
     }
@@ -331,17 +331,18 @@ class BookingServiceTest {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest();
         request.setStatus(BookingStatus.COMPLETED);
 
-        assertThatThrownBy(() -> bookingService.updateStatus(1L, user.getId(), request, false))
+        assertThatThrownBy(() -> bookingService.updateStatus(1L, user.getId(), request))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.BOOKING_STATUS_TRANSITION);
     }
 
     @Test
-    void updateStatusToConfirmedSetsConfirmedByAndAllowsManagerWhoOwnsTheRestaurant() {
+    void updateStatusToConfirmedSetsConfirmedByWhenActorOwnsTheRestaurant() {
         Booking booking = Booking.builder().id(1L).user(user).status(BookingStatus.PENDING)
                 .restaurant(table.getHall().getRestaurant()).table(table).build();
-        // The manager must be the actual owner of this booking's restaurant, not just hold a
-        // manager-tier role somewhere - see updateStatusThrowsAccessDeniedWhenManagerDoesNotOwnTheRestaurant.
+        // No role check involved - owning this booking's restaurant is what makes someone its
+        // manager. See updateStatusThrowsAccessDeniedWhenActorIsNeitherOwnerNorManager for the
+        // rejection case (some other, unrelated user).
         User manager = User.builder().id(RESTAURANT_OWNER_ID).firstname("Mgr").lastname("Admin").email("mgr@test.com").build();
         when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking));
         when(userRepository.findById(manager.getId())).thenReturn(Optional.of(manager));
@@ -350,7 +351,7 @@ class BookingServiceTest {
         UpdateBookingStatusRequest request = new UpdateBookingStatusRequest();
         request.setStatus(BookingStatus.CONFIRMED);
 
-        BookingDto dto = bookingService.updateStatus(1L, manager.getId(), request, true);
+        BookingDto dto = bookingService.updateStatus(1L, manager.getId(), request);
 
         assertThat(dto.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
         assertThat(booking.getConfirmedBy()).isEqualTo(manager);
@@ -358,24 +359,7 @@ class BookingServiceTest {
     }
 
     @Test
-    void updateStatusThrowsAccessDeniedWhenManagerDoesNotOwnTheRestaurant() {
-        // Regression test: `isManager=true` alone used to be sufficient - a RESTAURANT_ADMIN/
-        // COMPANY_ADMIN at any restaurant could confirm/cancel/complete bookings at restaurants
-        // they don't manage (IDOR). Only the owner of *this* booking's restaurant may act as manager.
-        Booking booking = Booking.builder().id(1L).user(user).status(BookingStatus.PENDING)
-                .restaurant(table.getHall().getRestaurant()).table(table).build();
-        when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking));
-
-        UpdateBookingStatusRequest request = new UpdateBookingStatusRequest();
-        request.setStatus(BookingStatus.CONFIRMED);
-
-        assertThatThrownBy(() -> bookingService.updateStatus(1L, 999L, request, true))
-                .isInstanceOf(ApiException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.ACCESS_DENIED);
-    }
-
-    @Test
-    void updateStatusAllowsOwnerToCancelOwnBookingWithoutManagerRole() {
+    void updateStatusAllowsOwnerToCancelOwnBooking() {
         Booking booking = Booking.builder().id(1L).user(user).status(BookingStatus.PENDING)
                 .restaurant(table.getHall().getRestaurant()).table(table).build();
         when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking));
@@ -386,7 +370,7 @@ class BookingServiceTest {
         request.setStatus(BookingStatus.CANCELLED);
         request.setCancelReason("changed my mind");
 
-        BookingDto dto = bookingService.updateStatus(1L, user.getId(), request, false);
+        BookingDto dto = bookingService.updateStatus(1L, user.getId(), request);
 
         assertThat(dto.getStatus()).isEqualTo(BookingStatus.CANCELLED);
         assertThat(booking.getCancelledBy()).isEqualTo(user);

@@ -141,15 +141,15 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingDto updateStatus(Long bookingId, Long userId, UpdateBookingStatusRequest request, boolean isManager) {
+    public BookingDto updateStatus(Long bookingId, Long userId, UpdateBookingStatusRequest request) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ApiException(ErrorCode.BOOKING_NOT_FOUND));
 
-        // `isManager` only means "holds a manager-tier role somewhere" - on its own that let any
-        // restaurant/company admin confirm/cancel/complete bookings at restaurants they don't
-        // manage (IDOR). A manager may only act on a booking at a restaurant their own company owns.
-        boolean managesThisRestaurant = isManager
-                && booking.getRestaurant().getCompany().getOwner().getId().equals(userId);
+        // No role check here by design (roles like RESTAURANT_ADMIN are never actually granted
+        // anywhere in the app) - owning the restaurant this booking belongs to is what makes
+        // someone its manager, matching the ownership pattern used by every other service
+        // (HallService, MenuItemService, AnalyticsService, ...).
+        boolean managesThisRestaurant = booking.getRestaurant().getCompany().getOwner().getId().equals(userId);
         if (!managesThisRestaurant && !booking.getUser().getId().equals(userId)) {
             throw new ApiException(ErrorCode.ACCESS_DENIED);
         }

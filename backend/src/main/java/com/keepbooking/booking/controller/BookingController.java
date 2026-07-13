@@ -23,7 +23,6 @@ import com.keepbooking.booking.model.BookingStatus;
 import com.keepbooking.booking.service.BookingService;
 import com.keepbooking.common.dto.PageResponse;
 import com.keepbooking.user.model.User;
-import com.keepbooking.user.model.UserRole;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -64,7 +63,7 @@ public class BookingController {
 
     @Operation(summary = "Get restaurant bookings (owner only)")
     @GetMapping("/restaurant/{restaurantId}")
-    @PreAuthorize("hasAnyRole('RESTAURANT_ADMIN', 'COMPANY_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PageResponse<BookingDto>> getRestaurantBookings(
             @AuthenticationPrincipal User user,
             @PathVariable Long restaurantId,
@@ -80,10 +79,6 @@ public class BookingController {
     public ResponseEntity<BookingDto> updateStatus(@PathVariable Long id,
                                                     @AuthenticationPrincipal User user,
                                                     @Valid @RequestBody UpdateBookingStatusRequest request) {
-        boolean isManager = user.getRoles().stream()
-                .anyMatch(r -> r == UserRole.ROLE_RESTAURANT_ADMIN
-                        || r == UserRole.ROLE_COMPANY_ADMIN
-                        || r == UserRole.ROLE_SUPER_ADMIN);
-        return ResponseEntity.ok(bookingService.updateStatus(id, user.getId(), request, isManager));
+        return ResponseEntity.ok(bookingService.updateStatus(id, user.getId(), request));
     }
 }
