@@ -8,15 +8,17 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.keepbooking.restaurant.dto.UpsertWorkingHoursDayRequest;
 import com.keepbooking.restaurant.dto.UpsertWorkingHoursOverrideRequest;
 import com.keepbooking.restaurant.dto.WorkingHoursDto;
-import com.keepbooking.restaurant.dto.WorkingHoursItemRequest;
 import com.keepbooking.restaurant.dto.WorkingHoursOverrideDto;
 import com.keepbooking.restaurant.service.WorkingHoursService;
 import com.keepbooking.user.model.User;
@@ -25,12 +27,15 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 
 @Tag(name = "Working hours", description = "Restaurant weekly schedule and per-date overrides (holidays)")
 @RestController
 @RequestMapping("/api/v1/restaurants/{restaurantId}/working-hours")
 @RequiredArgsConstructor
+@Validated
 public class WorkingHoursController {
 
     private final WorkingHoursService workingHoursService;
@@ -41,14 +46,15 @@ public class WorkingHoursController {
         return ResponseEntity.ok(workingHoursService.listByRestaurant(restaurantId));
     }
 
-    @Operation(summary = "Replace restaurant weekly schedule")
-    @PutMapping
+    @Operation(summary = "Create or replace the schedule for a single day of the week")
+    @PatchMapping("/{dayOfWeek}")
     @PreAuthorize("isAuthenticated()")
     @SecurityRequirement(name = "bearerAuth")
-    public ResponseEntity<List<WorkingHoursDto>> replace(@AuthenticationPrincipal User user,
-                                                           @PathVariable Long restaurantId,
-                                                           @Valid @RequestBody List<@Valid WorkingHoursItemRequest> items) {
-        return ResponseEntity.ok(workingHoursService.replaceWeek(user.getId(), restaurantId, items));
+    public ResponseEntity<WorkingHoursDto> upsertDay(@AuthenticationPrincipal User user,
+                                                       @PathVariable Long restaurantId,
+                                                       @PathVariable @Min(1) @Max(7) Integer dayOfWeek,
+                                                       @Valid @RequestBody UpsertWorkingHoursDayRequest request) {
+        return ResponseEntity.ok(workingHoursService.upsertDay(user.getId(), restaurantId, dayOfWeek, request));
     }
 
     @Operation(summary = "Get per-date schedule overrides (holidays / special days, public)")

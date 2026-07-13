@@ -10,9 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.restaurant.dto.UpsertWorkingHoursDayRequest;
 import com.keepbooking.restaurant.dto.UpsertWorkingHoursOverrideRequest;
 import com.keepbooking.restaurant.dto.WorkingHoursDto;
-import com.keepbooking.restaurant.dto.WorkingHoursItemRequest;
 import com.keepbooking.restaurant.dto.WorkingHoursOverrideDto;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.model.WorkingHours;
@@ -39,28 +39,21 @@ public class WorkingHoursService {
     }
 
     @Transactional
-    public List<WorkingHoursDto> replaceWeek(Long userId, Long restaurantId, List<WorkingHoursItemRequest> items) {
+    public WorkingHoursDto upsertDay(Long userId, Long restaurantId, Integer dayOfWeek, UpsertWorkingHoursDayRequest request) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
         verifyOwner(restaurant, userId);
 
-        workingHoursRepository.deleteByRestaurantId(restaurantId);
+        boolean isDayOff = Boolean.TRUE.equals(request.getIsDayOff());
+        validateHours(request.getOpenTime(), request.getCloseTime(), isDayOff);
 
-        List<WorkingHours> entries = items.stream()
-                .map(item -> {
-                    boolean isDayOff = Boolean.TRUE.equals(item.getIsDayOff());
-                    validateHours(item.getOpenTime(), item.getCloseTime(), isDayOff);
-                    return WorkingHours.builder()
-                            .restaurant(restaurant)
-                            .dayOfWeek(item.getDayOfWeek())
-                            .openTime(item.getOpenTime())
-                            .closeTime(item.getCloseTime())
-                            .isDayOff(isDayOff)
-                            .build();
-                })
-                .toList();
+        WorkingHours entry = workingHoursRepository.findByRestaurantIdAndDayOfWeek(restaurantId, dayOfWeek)
+                .orElseGet(() -> WorkingHours.builder().restaurant(restaurant).dayOfWeek(dayOfWeek).build());
+        entry.setOpenTime(request.getOpenTime());
+        entry.setCloseTime(request.getCloseTime());
+        entry.setIsDayOff(isDayOff);
 
-        return workingHoursRepository.saveAll(entries).stream().map(this::toDto).toList();
+        return toDto(workingHoursRepository.save(entry));
     }
 
     @Transactional(readOnly = true)

@@ -3,7 +3,6 @@ package com.keepbooking.restaurant.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,9 +21,9 @@ import org.springframework.security.access.AccessDeniedException;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.restaurant.dto.UpsertWorkingHoursDayRequest;
 import com.keepbooking.restaurant.dto.UpsertWorkingHoursOverrideRequest;
 import com.keepbooking.restaurant.dto.WorkingHoursDto;
-import com.keepbooking.restaurant.dto.WorkingHoursItemRequest;
 import com.keepbooking.restaurant.dto.WorkingHoursOverrideDto;
 import com.keepbooking.restaurant.model.Company;
 import com.keepbooking.restaurant.model.Restaurant;
@@ -62,108 +61,118 @@ class WorkingHoursServiceTest {
         return Restaurant.builder().id(RESTAURANT_ID).company(company).name("Test Restaurant").build();
     }
 
-    private WorkingHoursItemRequest item(int dayOfWeek, Boolean isDayOff) {
-        WorkingHoursItemRequest item = new WorkingHoursItemRequest();
-        item.setDayOfWeek(dayOfWeek);
-        item.setOpenTime(LocalTime.of(9, 0));
-        item.setCloseTime(LocalTime.of(22, 0));
-        item.setIsDayOff(isDayOff);
-        return item;
+    private UpsertWorkingHoursDayRequest dayRequest(Boolean isDayOff) {
+        UpsertWorkingHoursDayRequest request = new UpsertWorkingHoursDayRequest();
+        request.setOpenTime(LocalTime.of(9, 0));
+        request.setCloseTime(LocalTime.of(22, 0));
+        request.setIsDayOff(isDayOff);
+        return request;
     }
 
     @Test
-    void replaceWeekThrowsWhenRestaurantNotFound() {
+    void upsertDayThrowsWhenRestaurantNotFound() {
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> workingHoursService.replaceWeek(OWNER_ID, RESTAURANT_ID, List.of(item(1, false))))
+        assertThatThrownBy(() -> workingHoursService.upsertDay(OWNER_ID, RESTAURANT_ID, 1, dayRequest(false)))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.RESTAURANT_NOT_FOUND);
     }
 
     @Test
-    void replaceWeekThrowsAccessDeniedWhenActorDoesNotOwnTheRestaurant() {
+    void upsertDayThrowsAccessDeniedWhenActorDoesNotOwnTheRestaurant() {
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
 
-        assertThatThrownBy(() -> workingHoursService.replaceWeek(OTHER_USER_ID, RESTAURANT_ID, List.of(item(1, false))))
+        assertThatThrownBy(() -> workingHoursService.upsertDay(OTHER_USER_ID, RESTAURANT_ID, 1, dayRequest(false)))
                 .isInstanceOf(AccessDeniedException.class);
 
-        verify(workingHoursRepository, never()).deleteByRestaurantId(RESTAURANT_ID);
-        verify(workingHoursRepository, never()).saveAll(anyList());
+        verify(workingHoursRepository, never()).save(any());
     }
 
     @Test
-    void replaceWeekDeletesExistingEntriesBeforeSavingNewOnes() {
-        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
-        when(workingHoursRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+    void upsertDayCreatesNewEntryWhenDayHasNoExistingSchedule() {
+        Restaurant restaurant = restaurantOwnedBy(OWNER_ID);
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
+        when(workingHoursRepository.findByRestaurantIdAndDayOfWeek(RESTAURANT_ID, 2)).thenReturn(Optional.empty());
+        when(workingHoursRepository.save(any(WorkingHours.class))).thenAnswer(inv -> {
+            WorkingHours wh = inv.getArgument(0);
+            wh.setId(900L);
+            return wh;
+        });
 
-        workingHoursService.replaceWeek(OWNER_ID, RESTAURANT_ID, List.of(item(1, false), item(2, true)));
+        WorkingHoursDto dto = workingHoursService.upsertDay(OWNER_ID, RESTAURANT_ID, 2, dayRequest(true));
 
-        verify(workingHoursRepository).deleteByRestaurantId(RESTAURANT_ID);
-        verify(workingHoursRepository).saveAll(anyList());
+        assertThat(dto.getId()).isEqualTo(900L);
+        assertThat(dto.getDayOfWeek()).isEqualTo(2);
+        assertThat(dto.getIsDayOff()).isTrue();
     }
 
     @Test
-    void replaceWeekDefaultsIsDayOffToFalseWhenNull() {
-        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
-        when(workingHoursRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+    void upsertDayUpdatesExistingEntryForThatDayInPlace() {
+        Restaurant restaurant = restaurantOwnedBy(OWNER_ID);
+        WorkingHours existing = WorkingHours.builder().id(700L).restaurant(restaurant).dayOfWeek(1)
+                .openTime(LocalTime.of(8, 0)).closeTime(LocalTime.of(17, 0)).isDayOff(false).build();
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
+        when(workingHoursRepository.findByRestaurantIdAndDayOfWeek(RESTAURANT_ID, 1)).thenReturn(Optional.of(existing));
+        when(workingHoursRepository.save(any(WorkingHours.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        List<WorkingHoursDto> result = workingHoursService.replaceWeek(OWNER_ID, RESTAURANT_ID, List.of(item(1, null)));
+        WorkingHoursDto dto = workingHoursService.upsertDay(OWNER_ID, RESTAURANT_ID, 1, dayRequest(false));
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getIsDayOff()).isFalse();
+        assertThat(dto.getId()).isEqualTo(700L);
+        assertThat(dto.getOpenTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(dto.getCloseTime()).isEqualTo(LocalTime.of(22, 0));
     }
 
     @Test
-    void replaceWeekPreservesIsDayOffTrueWhenSet() {
+    void upsertDayDefaultsIsDayOffToFalseWhenNull() {
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
-        when(workingHoursRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+        when(workingHoursRepository.findByRestaurantIdAndDayOfWeek(RESTAURANT_ID, 1)).thenReturn(Optional.empty());
+        when(workingHoursRepository.save(any(WorkingHours.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        List<WorkingHoursDto> result = workingHoursService.replaceWeek(OWNER_ID, RESTAURANT_ID, List.of(item(7, true)));
+        WorkingHoursDto dto = workingHoursService.upsertDay(OWNER_ID, RESTAURANT_ID, 1, dayRequest(null));
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getIsDayOff()).isTrue();
-        assertThat(result.get(0).getDayOfWeek()).isEqualTo(7);
+        assertThat(dto.getIsDayOff()).isFalse();
     }
 
     @Test
-    void replaceWeekThrowsWhenOpenAndCloseTimeAreEqualAndDayIsNotOff() {
+    void upsertDayThrowsWhenOpenAndCloseTimeAreEqualAndDayIsNotOff() {
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
 
-        WorkingHoursItemRequest bad = item(1, false);
+        UpsertWorkingHoursDayRequest bad = dayRequest(false);
         bad.setCloseTime(bad.getOpenTime());
 
-        assertThatThrownBy(() -> workingHoursService.replaceWeek(OWNER_ID, RESTAURANT_ID, List.of(bad)))
+        assertThatThrownBy(() -> workingHoursService.upsertDay(OWNER_ID, RESTAURANT_ID, 1, bad))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_ERROR);
 
-        verify(workingHoursRepository, never()).saveAll(anyList());
+        verify(workingHoursRepository, never()).save(any());
     }
 
     @Test
-    void replaceWeekThrowsWhenOpenOrCloseMissingAndDayIsNotOff() {
+    void upsertDayThrowsWhenOpenOrCloseMissingAndDayIsNotOff() {
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
 
-        WorkingHoursItemRequest bad = item(1, false);
+        UpsertWorkingHoursDayRequest bad = dayRequest(false);
         bad.setCloseTime(null);
 
-        assertThatThrownBy(() -> workingHoursService.replaceWeek(OWNER_ID, RESTAURANT_ID, List.of(bad)))
+        assertThatThrownBy(() -> workingHoursService.upsertDay(OWNER_ID, RESTAURANT_ID, 1, bad))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_ERROR);
     }
 
     @Test
-    void replaceWeekAllowsOvernightScheduleWhereCloseIsBeforeOpen() {
+    void upsertDayAllowsOvernightScheduleWhereCloseIsBeforeOpen() {
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
-        when(workingHoursRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+        when(workingHoursRepository.findByRestaurantIdAndDayOfWeek(RESTAURANT_ID, 5)).thenReturn(Optional.empty());
+        when(workingHoursRepository.save(any(WorkingHours.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        WorkingHoursItemRequest overnight = item(5, false);
+        UpsertWorkingHoursDayRequest overnight = dayRequest(false);
         overnight.setOpenTime(LocalTime.of(18, 0));
         overnight.setCloseTime(LocalTime.of(2, 0));
 
-        List<WorkingHoursDto> result = workingHoursService.replaceWeek(OWNER_ID, RESTAURANT_ID, List.of(overnight));
+        WorkingHoursDto dto = workingHoursService.upsertDay(OWNER_ID, RESTAURANT_ID, 5, overnight);
 
-        assertThat(result.get(0).getOpenTime()).isEqualTo(LocalTime.of(18, 0));
-        assertThat(result.get(0).getCloseTime()).isEqualTo(LocalTime.of(2, 0));
+        assertThat(dto.getOpenTime()).isEqualTo(LocalTime.of(18, 0));
+        assertThat(dto.getCloseTime()).isEqualTo(LocalTime.of(2, 0));
     }
 
     @Test
