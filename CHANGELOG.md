@@ -4,6 +4,16 @@
 
 ## [Unreleased] — 2026-07-13
 
+### Added — Ответ владельца на отзыв (owner reply)
+- Новая миграция `V019__review_owner_reply.sql`: `reviews.owner_reply TEXT`, `reviews.owner_reply_at TIMESTAMPTZ`, оба nullable
+- `PATCH /api/v1/reviews/{id}/reply` — `isAuthenticated()` + owner-check в сервисе (`review.getRestaurant().getCompany().getOwner().getId().equals(userId)`, тот же паттерн, что в `HallService`/`MenuItemService`/`WorkingHoursService`/`AnalyticsService`), тело `{"reply": "..."}` (`@NotBlank`, max 2000). Пока ответ не редактируется и не удаляется — только первичная простановка (повторный вызов молча перезаписывает `ownerReply`/`ownerReplyAt`, отдельного запрета на повторный ответ нет — сознательно не стал усложнять на этом шаге)
+- Новый `GET /api/v1/restaurants/{restaurantId}/reviews/manage` — owner-scoped список отзывов ресторана (в отличие от уже существующего `GET .../reviews`, который полностью публичный и без auth). Добавлен, т.к. до этого не было НИ ОДНОГО эндпоинта с owner-check для отзывов вообще — только публичное чтение и `SUPER_ADMIN`-only удаление
+- `ReviewDto` дополнен `ownerReply`/`ownerReplyAt`
+- Найдено при подготовке этой фичи (см. `CHANGELOG.md` `keepbooking-admin` за эту же дату): фичи «ответ владельца» не было вообще — ни поля в таблице, ни эндпоинта, ни owner-scoped списка. Не тихий баг вроде прошлых находок, а честное отсутствие функциональности — реализовано с нуля по явному запросу пользователя
+- 6 новых unit-тестов (`ReviewServiceTest`): reply — not-found/access-denied/success; getByRestaurantForOwner — not-found/access-denied/success
+- Полный прогон бэкенд-тестов: 252/254 (2 падения — известное ограничение песочницы на Testcontainers, не регрессия)
+- Проверено вживую через curl тремя аккаунтами: владелец получает `200` на `.../reviews/manage` и на `PATCH .../reply`, посторонний пользователь — `403` на оба; ответ владельца корректно появляется в `ReviewDto` с непустым `ownerReplyAt`
+
 ### Added — фильтр по диапазону дат в `GET /bookings/restaurant/{id}`
 - `?from=&to=` (оба опциональны, но должны идти парой — если задан только один, `400 VALIDATION_ERROR`; `from` после `to` — тоже `400`), тот же паттерн валидации, что уже используется в `AnalyticsController`
 - `BookingRepository`: новый derived-метод `findByRestaurantIdAndBookingDateBetweenOrderByBookingDateDesc`; без фильтра поведение не изменилось (старый `findByRestaurantIdOrderByBookingDateDesc` остался для случая, когда `from`/`to` не переданы)

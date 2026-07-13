@@ -15,16 +15,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
 
 import com.keepbooking.booking.model.Booking;
 import com.keepbooking.booking.model.BookingStatus;
 import com.keepbooking.booking.repository.BookingRepository;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.restaurant.model.Company;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.restaurant.service.RestaurantService;
 import com.keepbooking.review.dto.CreateReviewRequest;
+import com.keepbooking.review.dto.ReplyToReviewRequest;
 import com.keepbooking.review.dto.ReviewDto;
 import com.keepbooking.review.model.Review;
 import com.keepbooking.review.repository.ReviewRepository;
@@ -50,6 +55,7 @@ class ReviewServiceTest {
 
     private static final Long USER_ID = 1L;
     private static final Long BOOKING_ID = 100L;
+    private static final Long RESTAURANT_OWNER_ID = 300L;
 
     @BeforeEach
     void setUp() {
@@ -61,7 +67,10 @@ class ReviewServiceTest {
     }
 
     private Restaurant restaurant() {
-        return Restaurant.builder().id(1L).name("Test Restaurant").rating(BigDecimal.ZERO).reviewsCount(0).build();
+        Company company = Company.builder().id(1L).name("Test Co")
+                .owner(User.builder().id(RESTAURANT_OWNER_ID).build()).build();
+        return Restaurant.builder().id(1L).name("Test Restaurant").company(company)
+                .rating(BigDecimal.ZERO).reviewsCount(0).build();
     }
 
     private Booking completedBooking() {
@@ -164,5 +173,76 @@ class ReviewServiceTest {
         assertThat(restaurant.getRating()).isEqualByComparingTo("0.00");
         assertThat(restaurant.getReviewsCount()).isZero();
         verify(restaurantService).evictCaches(restaurant.getId());
+    }
+
+    @Test
+    void replyThrowsWhenReviewNotFound() {
+        when(reviewRepository.findById(1L)).thenReturn(Optional.empty());
+
+        ReplyToReviewRequest request = new ReplyToReviewRequest();
+        request.setReply("Thanks for visiting!");
+
+        assertThatThrownBy(() -> reviewService.reply(RESTAURANT_OWNER_ID, 1L, request))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.REVIEW_NOT_FOUND);
+    }
+
+    @Test
+    void replyThrowsAccessDeniedWhenActorDoesNotOwnTheRestaurant() {
+        Review review = Review.builder().id(1L).restaurant(restaurant()).user(user()).rating(5).build();
+        when(reviewRepository.findById(1L)).thenReturn(Optional.of(review));
+
+        ReplyToReviewRequest request = new ReplyToReviewRequest();
+        request.setReply("Thanks for visiting!");
+
+        assertThatThrownBy(() -> reviewService.reply(999L, 1L, request))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void replySetsOwnerReplyAndOwnerReplyAtForTheOwner() {
+        Review review = Review.builder().id(1L).restaurant(restaurant()).user(user()).booking(completedBooking()).rating(5).build();
+        when(reviewRepository.findById(1L)).thenReturn(Optional.of(review));
+        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ReplyToReviewRequest request = new ReplyToReviewRequest();
+        request.setReply("Thanks for visiting!");
+
+        ReviewDto dto = reviewService.reply(RESTAURANT_OWNER_ID, 1L, request);
+
+        assertThat(dto.getOwnerReply()).isEqualTo("Thanks for visiting!");
+        assertThat(dto.getOwnerReplyAt()).isNotNull();
+    }
+
+    @Test
+    void getByRestaurantForOwnerThrowsWhenRestaurantNotFound() {
+        when(restaurantRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reviewService.getByRestaurantForOwner(RESTAURANT_OWNER_ID, 1L, PageRequest.of(0, 20)))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.RESTAURANT_NOT_FOUND);
+    }
+
+    @Test
+    void getByRestaurantForOwnerThrowsAccessDeniedWhenActorDoesNotOwnTheRestaurant() {
+        when(restaurantRepository.findById(1L)).thenReturn(Optional.of(restaurant()));
+
+        assertThatThrownBy(() -> reviewService.getByRestaurantForOwner(999L, 1L, PageRequest.of(0, 20)))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void getByRestaurantForOwnerReturnsReviewsForTheOwner() {
+        Restaurant restaurant = restaurant();
+        Review review = Review.builder().id(1L).restaurant(restaurant).user(user()).booking(completedBooking()).rating(5).build();
+        when(restaurantRepository.findById(1L)).thenReturn(Optional.of(restaurant));
+        when(reviewRepository.findByRestaurantIdOrderByCreatedAtDesc(1L, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(java.util.List.of(review)));
+
+        var result = reviewService.getByRestaurantForOwner(RESTAURANT_OWNER_ID, 1L, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).extracting(ReviewDto::getId).containsExactly(1L);
     }
 }

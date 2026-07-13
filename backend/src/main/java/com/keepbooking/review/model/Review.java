@@ -1,5 +1,7 @@
 package com.keepbooking.review.model;
 
+import java.time.Instant;
+
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -53,4 +55,10 @@ public class Review extends BaseEntity {
     private Integer rating;
 
     private String comment;
+
+    @Column(name = "owner_reply")
+    private String ownerReply;
+
+    @Column(name = "owner_reply_at")
+    private Instant ownerReplyAt;
 }

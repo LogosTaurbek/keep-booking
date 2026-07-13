@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.keepbooking.common.dto.PageResponse;
 import com.keepbooking.review.dto.CreateReviewRequest;
+import com.keepbooking.review.dto.ReplyToReviewRequest;
 import com.keepbooking.review.dto.ReviewDto;
 import com.keepbooking.review.service.ReviewService;
 import com.keepbooking.user.model.User;
@@ -51,5 +54,14 @@ public class ReviewController {
             @RequestParam(defaultValue = "20") int size) {
         var pageable = PageRequest.of(page, Math.min(size, 100), Sort.by("createdAt").descending());
         return ResponseEntity.ok(reviewService.getMyReviews(user.getId(), pageable));
+    }
+
+    @Operation(summary = "Reply to a review as the restaurant owner")
+    @PatchMapping("/{id}/reply")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ReviewDto> reply(@AuthenticationPrincipal User user,
+                                            @PathVariable Long id,
+                                            @Valid @RequestBody ReplyToReviewRequest request) {
+        return ResponseEntity.ok(reviewService.reply(user.getId(), id, request));
     }
 }

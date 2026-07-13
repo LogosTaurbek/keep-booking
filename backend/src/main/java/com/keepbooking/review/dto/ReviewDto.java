@@ -16,4 +16,6 @@ public class ReviewDto {
     private Integer rating;
     private String comment;
     private Instant createdAt;
+    private String ownerReply;
+    private Instant ownerReplyAt;
 }

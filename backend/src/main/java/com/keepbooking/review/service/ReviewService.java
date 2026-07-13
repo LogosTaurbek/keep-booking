@@ -2,9 +2,11 @@ package com.keepbooking.review.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,7 @@ import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.restaurant.service.RestaurantService;
 import com.keepbooking.review.dto.CreateReviewRequest;
+import com.keepbooking.review.dto.ReplyToReviewRequest;
 import com.keepbooking.review.dto.ReviewDto;
 import com.keepbooking.review.model.Review;
 import com.keepbooking.review.repository.ReviewRepository;
@@ -69,6 +72,31 @@ public class ReviewService {
     }
 
     @Transactional(readOnly = true)
+    public PageResponse<ReviewDto> getByRestaurantForOwner(Long userId, Long restaurantId, Pageable pageable) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
+        if (!restaurant.getCompany().getOwner().getId().equals(userId)) {
+            throw new AccessDeniedException("You don't own this restaurant");
+        }
+        Page<Review> page = reviewRepository.findByRestaurantIdOrderByCreatedAtDesc(restaurantId, pageable);
+        return PageResponse.of(page.map(this::toDto));
+    }
+
+    @Transactional
+    public ReviewDto reply(Long userId, Long reviewId, ReplyToReviewRequest request) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ApiException(ErrorCode.REVIEW_NOT_FOUND));
+        if (!review.getRestaurant().getCompany().getOwner().getId().equals(userId)) {
+            throw new AccessDeniedException("You don't own this restaurant");
+        }
+
+        review.setOwnerReply(request.getReply());
+        review.setOwnerReplyAt(Instant.now());
+
+        return toDto(reviewRepository.save(review));
+    }
+
+    @Transactional(readOnly = true)
     public PageResponse<ReviewDto> getMyReviews(Long userId, Pageable pageable) {
         Page<Review> page = reviewRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
         return PageResponse.of(page.map(this::toDto));
@@ -108,6 +136,8 @@ public class ReviewService {
                 .rating(r.getRating())
                 .comment(r.getComment())
                 .createdAt(r.getCreatedAt())
+                .ownerReply(r.getOwnerReply())
+                .ownerReplyAt(r.getOwnerReplyAt())
                 .build();
     }
 }
