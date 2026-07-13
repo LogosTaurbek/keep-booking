@@ -25,6 +25,9 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
 
     Page<Booking> findByRestaurantIdOrderByBookingDateDesc(Long restaurantId, Pageable pageable);
 
+    Page<Booking> findByRestaurantIdAndBookingDateBetweenOrderByBookingDateDesc(
+            Long restaurantId, LocalDate from, LocalDate to, Pageable pageable);
+
     List<Booking> findByTableIdAndBookingDateAndStatusIn(Long tableId, LocalDate date, List<BookingStatus> statuses);
 
     Optional<Booking> findByIdempotencyKey(String idempotencyKey);

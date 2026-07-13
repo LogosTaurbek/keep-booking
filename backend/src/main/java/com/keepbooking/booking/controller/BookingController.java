@@ -1,5 +1,7 @@
 package com.keepbooking.booking.controller;
 
+import java.time.LocalDate;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -61,16 +63,18 @@ public class BookingController {
         return ResponseEntity.ok(bookingService.getMyBookings(user.getId(), status, pageable));
     }
 
-    @Operation(summary = "Get restaurant bookings (owner only)")
+    @Operation(summary = "Get restaurant bookings (owner only), optionally filtered by booking date range")
     @GetMapping("/restaurant/{restaurantId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PageResponse<BookingDto>> getRestaurantBookings(
             @AuthenticationPrincipal User user,
             @PathVariable Long restaurantId,
+            @RequestParam(required = false) LocalDate from,
+            @RequestParam(required = false) LocalDate to,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         var pageable = PageRequest.of(page, size, Sort.by("bookingDate").descending());
-        return ResponseEntity.ok(bookingService.getRestaurantBookings(user.getId(), restaurantId, pageable));
+        return ResponseEntity.ok(bookingService.getRestaurantBookings(user.getId(), restaurantId, from, to, pageable));
     }
 
     @Operation(summary = "Update booking status (confirm / cancel / complete)")

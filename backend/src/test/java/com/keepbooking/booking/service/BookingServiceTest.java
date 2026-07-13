@@ -382,7 +382,7 @@ class BookingServiceTest {
     void getRestaurantBookingsThrowsWhenRestaurantNotFound() {
         when(restaurantRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> bookingService.getRestaurantBookings(RESTAURANT_OWNER_ID, 1L, PageRequest.of(0, 20)))
+        assertThatThrownBy(() -> bookingService.getRestaurantBookings(RESTAURANT_OWNER_ID, 1L, null, null, PageRequest.of(0, 20)))
                 .isInstanceOf(ApiException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.RESTAURANT_NOT_FOUND);
     }
@@ -391,7 +391,7 @@ class BookingServiceTest {
     void getRestaurantBookingsThrowsAccessDeniedWhenActorDoesNotOwnTheRestaurant() {
         when(restaurantRepository.findById(1L)).thenReturn(Optional.of(table.getHall().getRestaurant()));
 
-        assertThatThrownBy(() -> bookingService.getRestaurantBookings(999L, 1L, PageRequest.of(0, 20)))
+        assertThatThrownBy(() -> bookingService.getRestaurantBookings(999L, 1L, null, null, PageRequest.of(0, 20)))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -403,8 +403,44 @@ class BookingServiceTest {
         when(bookingRepository.findByRestaurantIdOrderByBookingDateDesc(1L, PageRequest.of(0, 20)))
                 .thenReturn(new PageImpl<>(java.util.List.of(booking)));
 
-        var result = bookingService.getRestaurantBookings(RESTAURANT_OWNER_ID, 1L, PageRequest.of(0, 20));
+        var result = bookingService.getRestaurantBookings(RESTAURANT_OWNER_ID, 1L, null, null, PageRequest.of(0, 20));
 
         assertThat(result.getContent()).extracting(BookingDto::getId).containsExactly(1L);
+    }
+
+    @Test
+    void getRestaurantBookingsThrowsWhenOnlyFromIsProvided() {
+        when(restaurantRepository.findById(1L)).thenReturn(Optional.of(table.getHall().getRestaurant()));
+
+        assertThatThrownBy(() -> bookingService.getRestaurantBookings(
+                RESTAURANT_OWNER_ID, 1L, LocalDate.of(2026, 1, 1), null, PageRequest.of(0, 20)))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_ERROR);
+    }
+
+    @Test
+    void getRestaurantBookingsThrowsWhenFromIsAfterTo() {
+        when(restaurantRepository.findById(1L)).thenReturn(Optional.of(table.getHall().getRestaurant()));
+
+        assertThatThrownBy(() -> bookingService.getRestaurantBookings(
+                RESTAURANT_OWNER_ID, 1L, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 1, 1), PageRequest.of(0, 20)))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_ERROR);
+    }
+
+    @Test
+    void getRestaurantBookingsFiltersByDateRangeWhenBothProvided() {
+        Booking booking = Booking.builder().id(1L).user(user).status(BookingStatus.PENDING)
+                .restaurant(table.getHall().getRestaurant()).table(table).build();
+        LocalDate from = LocalDate.of(2026, 1, 1);
+        LocalDate to = LocalDate.of(2026, 1, 31);
+        when(restaurantRepository.findById(1L)).thenReturn(Optional.of(table.getHall().getRestaurant()));
+        when(bookingRepository.findByRestaurantIdAndBookingDateBetweenOrderByBookingDateDesc(1L, from, to, PageRequest.of(0, 20)))
+                .thenReturn(new PageImpl<>(java.util.List.of(booking)));
+
+        var result = bookingService.getRestaurantBookings(RESTAURANT_OWNER_ID, 1L, from, to, PageRequest.of(0, 20));
+
+        assertThat(result.getContent()).extracting(BookingDto::getId).containsExactly(1L);
+        verify(bookingRepository, never()).findByRestaurantIdOrderByBookingDateDesc(any(), any());
     }
 }

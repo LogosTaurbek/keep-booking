@@ -4,6 +4,13 @@
 
 ## [Unreleased] — 2026-07-13
 
+### Added — фильтр по диапазону дат в `GET /bookings/restaurant/{id}`
+- `?from=&to=` (оба опциональны, но должны идти парой — если задан только один, `400 VALIDATION_ERROR`; `from` после `to` — тоже `400`), тот же паттерн валидации, что уже используется в `AnalyticsController`
+- `BookingRepository`: новый derived-метод `findByRestaurantIdAndBookingDateBetweenOrderByBookingDateDesc`; без фильтра поведение не изменилось (старый `findByRestaurantIdOrderByBookingDateDesc` остался для случая, когда `from`/`to` не переданы)
+- 4 новых unit-теста (`BookingServiceTest`): только `from` без `to` → validation error, `from` после `to` → validation error, диапазон включает бронь, диапазон исключает бронь (плюс проверка, что при заданном диапазоне вызывается именно ranged-метод репозитория, а не полный список)
+- Полный прогон бэкенд-тестов: 246/248 (2 падения — известное ограничение песочницы на Testcontainers, не регрессия)
+- Проверено вживую через curl: без фильтра — бронь видна; диапазон, включающий её дату — видна; диапазон, исключающий — пустой список; только `from` — 400; `from` позже `to` — 400
+
 ### Changed — `working-hours` перевёден с full-replace PUT на per-day PATCH
 - Было: `PUT /api/v1/restaurants/{id}/working-hours` принимал список из всех 7 дней и делал `deleteByRestaurantId` + `saveAll` — полная пересборка недели на каждое сохранение, даже если правился один день. Любой день, не попавший в присланный список, тихо удалялся
 - Стало: `PATCH /api/v1/restaurants/{id}/working-hours/{dayOfWeek}` — upsert одного дня по `(restaurantId, dayOfWeek)`, тем же паттерном, что уже использовался для `PUT /working-hours/overrides` (upsert по дате). `WorkingHoursService.replaceWeek` заменён на `upsertDay`; `WorkingHoursItemRequest` удалён, добавлен `UpsertWorkingHoursDayRequest` (без `dayOfWeek` в теле — он теперь в пути); `WorkingHoursRepository.deleteByRestaurantId` и связанный `@Modifying`-запрос удалены как более не нужные

@@ -205,13 +205,25 @@ public class BookingService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<BookingDto> getRestaurantBookings(Long userId, Long restaurantId, Pageable pageable) {
+    public PageResponse<BookingDto> getRestaurantBookings(Long userId, Long restaurantId, LocalDate from, LocalDate to, Pageable pageable) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
         if (!restaurant.getCompany().getOwner().getId().equals(userId)) {
             throw new AccessDeniedException("You don't own this restaurant");
         }
-        return PageResponse.of(bookingRepository.findByRestaurantIdOrderByBookingDateDesc(restaurantId, pageable).map(this::toDto));
+
+        if (from == null && to == null) {
+            return PageResponse.of(bookingRepository.findByRestaurantIdOrderByBookingDateDesc(restaurantId, pageable).map(this::toDto));
+        }
+        if (from == null || to == null) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "'from' and 'to' must both be provided together");
+        }
+        if (from.isAfter(to)) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "'from' must not be after 'to'");
+        }
+        return PageResponse.of(bookingRepository
+                .findByRestaurantIdAndBookingDateBetweenOrderByBookingDateDesc(restaurantId, from, to, pageable)
+                .map(this::toDto));
     }
 
     private void validateBookingTime(LocalDate date, LocalTime from, LocalTime to, String restaurantTimezone) {
