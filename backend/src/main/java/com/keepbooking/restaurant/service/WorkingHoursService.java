@@ -4,12 +4,12 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.restaurant.dto.UpsertWorkingHoursDayRequest;
 import com.keepbooking.restaurant.dto.UpsertWorkingHoursOverrideRequest;
 import com.keepbooking.restaurant.dto.WorkingHoursDto;
@@ -30,6 +30,7 @@ public class WorkingHoursService {
     private final WorkingHoursRepository workingHoursRepository;
     private final WorkingHoursOverrideRepository overrideRepository;
     private final RestaurantRepository restaurantRepository;
+    private final AccessControlService accessControlService;
 
     @Transactional(readOnly = true)
     public List<WorkingHoursDto> listByRestaurant(Long restaurantId) {
@@ -42,7 +43,7 @@ public class WorkingHoursService {
     public WorkingHoursDto upsertDay(Long userId, Long restaurantId, Integer dayOfWeek, UpsertWorkingHoursDayRequest request) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
-        verifyOwner(restaurant, userId);
+        accessControlService.verifyCanManageRestaurant(userId, restaurant);
 
         boolean isDayOff = Boolean.TRUE.equals(request.getIsDayOff());
         validateHours(request.getOpenTime(), request.getCloseTime(), isDayOff);
@@ -67,7 +68,7 @@ public class WorkingHoursService {
     public WorkingHoursOverrideDto upsertOverride(Long userId, Long restaurantId, UpsertWorkingHoursOverrideRequest request) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
-        verifyOwner(restaurant, userId);
+        accessControlService.verifyCanManageRestaurant(userId, restaurant);
 
         boolean isClosed = Boolean.TRUE.equals(request.getIsClosed());
         validateHours(request.getOpenTime(), request.getCloseTime(), isClosed);
@@ -85,14 +86,8 @@ public class WorkingHoursService {
     public void deleteOverride(Long userId, Long restaurantId, LocalDate date) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
-        verifyOwner(restaurant, userId);
+        accessControlService.verifyCanManageRestaurant(userId, restaurant);
         overrideRepository.deleteByRestaurantIdAndDate(restaurantId, date);
-    }
-
-    private void verifyOwner(Restaurant restaurant, Long userId) {
-        if (!restaurant.getCompany().getOwner().getId().equals(userId)) {
-            throw new AccessDeniedException("You don't own this restaurant");
-        }
     }
 
     /**

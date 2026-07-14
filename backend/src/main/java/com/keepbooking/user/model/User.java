@@ -2,9 +2,7 @@ package com.keepbooking.user.model;
 
 import java.time.Instant;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.List;
 
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -14,9 +12,7 @@ import com.keepbooking.common.model.BaseEntity;
 import com.keepbooking.reference.model.City;
 import com.keepbooking.reference.model.Country;
 
-import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
-import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -93,12 +89,20 @@ public class User extends BaseEntity implements UserDetails {
     @Builder.Default
     private Boolean emailVerified = false;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
-    @Column(name = "role")
+    @Column(nullable = false)
     @Builder.Default
-    private Set<UserRole> roles = new HashSet<>();
+    private UserRole role = UserRole.ROLE_USER;
+
+    // Scope of the role above - see UserRole for the exact combinations this can take.
+    // ROLE_USER/ROLE_SUPER_ADMIN: both null. ROLE_COMPANY_ADMIN: companyId set, restaurantId
+    // null (manages every restaurant in that company). ROLE_RESTAURANT_ADMIN: both set (manages
+    // only that one restaurant). Enforced in the DB via chk_users_role_scope (V020).
+    @Column(name = "company_id")
+    private Long companyId;
+
+    @Column(name = "restaurant_id")
+    private Long restaurantId;
 
     private Instant deletedAt;
 
@@ -106,9 +110,7 @@ public class User extends BaseEntity implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return roles.stream()
-                .map(role -> new SimpleGrantedAuthority(role.name()))
-                .collect(Collectors.toSet());
+        return List.of(new SimpleGrantedAuthority(role.name()));
     }
 
     @Override

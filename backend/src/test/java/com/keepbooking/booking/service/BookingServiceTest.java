@@ -31,6 +31,7 @@ import com.keepbooking.booking.repository.BookingRepository;
 import com.keepbooking.common.audit.AuditLogService;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.notification.service.NotificationService;
 import com.keepbooking.restaurant.model.Company;
 import com.keepbooking.restaurant.model.Hall;
@@ -42,6 +43,7 @@ import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.restaurant.repository.TableRepository;
 import com.keepbooking.restaurant.service.WorkingHoursResolver;
 import com.keepbooking.user.model.User;
+import com.keepbooking.user.model.UserRole;
 import com.keepbooking.user.repository.UserRepository;
 import com.keepbooking.waitlist.service.WaitlistService;
 
@@ -77,6 +79,7 @@ class BookingServiceTest {
     private BookingService bookingService;
 
     private static final Long RESTAURANT_OWNER_ID = 300L;
+    private static final Long COMPANY_ID = 1L;
 
     private User user;
     private RestaurantTable table;
@@ -85,13 +88,12 @@ class BookingServiceTest {
     void setUp() {
         bookingService = new BookingService(bookingRepository, restaurantRepository, tableRepository,
                 userRepository, idempotencyService, notificationService, auditLogService, new SimpleMeterRegistry(),
-                workingHoursResolver, waitlistService);
+                workingHoursResolver, waitlistService, new AccessControlService(userRepository));
         // Most tests aren't about opening hours - default to "always open" and let the
         // dedicated test below override this to exercise the BOOKING_RESTAURANT_CLOSED path.
         lenient().when(workingHoursResolver.isOpenAt(any(), any(), any(), any())).thenReturn(true);
 
-        Company company = Company.builder().id(1L).name("Test Co")
-                .owner(User.builder().id(RESTAURANT_OWNER_ID).build()).build();
+        Company company = Company.builder().id(COMPANY_ID).name("Test Co").build();
         Restaurant restaurant = Restaurant.builder()
                 .id(1L)
                 .name("Test Restaurant")
@@ -108,6 +110,11 @@ class BookingServiceTest {
                 .status(TableStatus.ACTIVE)
                 .build();
         user = User.builder().id(100L).firstname("Test").lastname("User").email("test@test.com").build();
+    }
+
+    private void stubRestaurantOwner() {
+        when(userRepository.findById(RESTAURANT_OWNER_ID)).thenReturn(Optional.of(
+                User.builder().id(RESTAURANT_OWNER_ID).role(UserRole.ROLE_COMPANY_ADMIN).companyId(COMPANY_ID).build()));
     }
 
     private CreateBookingRequest validRequest() {
@@ -343,7 +350,8 @@ class BookingServiceTest {
         // No role check involved - owning this booking's restaurant is what makes someone its
         // manager. See updateStatusThrowsAccessDeniedWhenActorIsNeitherOwnerNorManager for the
         // rejection case (some other, unrelated user).
-        User manager = User.builder().id(RESTAURANT_OWNER_ID).firstname("Mgr").lastname("Admin").email("mgr@test.com").build();
+        User manager = User.builder().id(RESTAURANT_OWNER_ID).firstname("Mgr").lastname("Admin").email("mgr@test.com")
+                .role(UserRole.ROLE_COMPANY_ADMIN).companyId(COMPANY_ID).build();
         when(bookingRepository.findById(1L)).thenReturn(Optional.of(booking));
         when(userRepository.findById(manager.getId())).thenReturn(Optional.of(manager));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -397,6 +405,7 @@ class BookingServiceTest {
 
     @Test
     void getRestaurantBookingsReturnsBookingsForTheOwner() {
+        stubRestaurantOwner();
         Booking booking = Booking.builder().id(1L).user(user).status(BookingStatus.PENDING)
                 .restaurant(table.getHall().getRestaurant()).table(table).build();
         when(restaurantRepository.findById(1L)).thenReturn(Optional.of(table.getHall().getRestaurant()));
@@ -410,6 +419,7 @@ class BookingServiceTest {
 
     @Test
     void getRestaurantBookingsThrowsWhenOnlyFromIsProvided() {
+        stubRestaurantOwner();
         when(restaurantRepository.findById(1L)).thenReturn(Optional.of(table.getHall().getRestaurant()));
 
         assertThatThrownBy(() -> bookingService.getRestaurantBookings(
@@ -420,6 +430,7 @@ class BookingServiceTest {
 
     @Test
     void getRestaurantBookingsThrowsWhenFromIsAfterTo() {
+        stubRestaurantOwner();
         when(restaurantRepository.findById(1L)).thenReturn(Optional.of(table.getHall().getRestaurant()));
 
         assertThatThrownBy(() -> bookingService.getRestaurantBookings(
@@ -430,6 +441,7 @@ class BookingServiceTest {
 
     @Test
     void getRestaurantBookingsFiltersByDateRangeWhenBothProvided() {
+        stubRestaurantOwner();
         Booking booking = Booking.builder().id(1L).user(user).status(BookingStatus.PENDING)
                 .restaurant(table.getHall().getRestaurant()).table(table).build();
         LocalDate from = LocalDate.of(2026, 1, 1);

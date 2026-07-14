@@ -21,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.common.storage.FileStorageService;
 import com.keepbooking.restaurant.dto.RestaurantPhotoDto;
 import com.keepbooking.restaurant.model.Company;
@@ -29,6 +30,8 @@ import com.keepbooking.restaurant.model.RestaurantPhoto;
 import com.keepbooking.restaurant.repository.RestaurantPhotoRepository;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.user.model.User;
+import com.keepbooking.user.model.UserRole;
+import com.keepbooking.user.repository.UserRepository;
 
 /**
  * delete() double-checks photo.restaurant.id == the restaurantId path param, not just
@@ -45,22 +48,31 @@ class RestaurantPhotoServiceTest {
     private RestaurantRepository restaurantRepository;
     @Mock
     private FileStorageService fileStorageService;
+    @Mock
+    private UserRepository userRepository;
 
     private RestaurantPhotoService restaurantPhotoService;
 
     private static final Long OWNER_ID = 1L;
     private static final Long OTHER_USER_ID = 2L;
+    private static final Long COMPANY_ID = 1L;
     private static final Long RESTAURANT_ID = 10L;
     private static final Long OTHER_RESTAURANT_ID = 20L;
     private static final Long PHOTO_ID = 100L;
 
     @BeforeEach
     void setUp() {
-        restaurantPhotoService = new RestaurantPhotoService(restaurantPhotoRepository, restaurantRepository, fileStorageService);
+        restaurantPhotoService = new RestaurantPhotoService(
+                restaurantPhotoRepository, restaurantRepository, fileStorageService, new AccessControlService(userRepository));
+    }
+
+    private void stubOwner() {
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(
+                User.builder().id(OWNER_ID).role(UserRole.ROLE_COMPANY_ADMIN).companyId(COMPANY_ID).build()));
     }
 
     private Restaurant restaurantOwnedBy(Long id, Long ownerId) {
-        Company company = Company.builder().id(1L).owner(User.builder().id(ownerId).build()).name("Co").build();
+        Company company = Company.builder().id(COMPANY_ID).name("Co").build();
         return Restaurant.builder().id(id).company(company).name("Test Restaurant").build();
     }
 
@@ -89,6 +101,7 @@ class RestaurantPhotoServiceTest {
 
     @Test
     void uploadAssignsNextPositionBasedOnExistingPhotoCount() {
+        stubOwner();
         Restaurant restaurant = restaurantOwnedBy(RESTAURANT_ID, OWNER_ID);
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
         when(fileStorageService.upload(any(), any())).thenReturn("https://cdn/bucket/restaurants/10/x.jpg");
@@ -143,6 +156,7 @@ class RestaurantPhotoServiceTest {
 
     @Test
     void deleteSucceedsForOwnerAndRemovesUnderlyingFile() {
+        stubOwner();
         Restaurant restaurant = restaurantOwnedBy(RESTAURANT_ID, OWNER_ID);
         RestaurantPhoto photo = RestaurantPhoto.builder().id(PHOTO_ID).restaurant(restaurant)
                 .url("https://cdn/bucket/restaurants/10/x.jpg").position(0).build();

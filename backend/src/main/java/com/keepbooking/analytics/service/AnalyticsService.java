@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.data.domain.PageRequest;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +16,7 @@ import com.keepbooking.analytics.repository.RestaurantDailyTableStatsRepository;
 import com.keepbooking.booking.repository.BookingRepository;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 
@@ -41,14 +41,13 @@ public class AnalyticsService {
     private final RestaurantDailyStatsRepository dailyStatsRepository;
     private final RestaurantDailyHourStatsRepository hourStatsRepository;
     private final RestaurantDailyTableStatsRepository tableStatsRepository;
+    private final AccessControlService accessControlService;
 
     @Transactional(readOnly = true)
     public RestaurantAnalyticsDto getRestaurantAnalytics(Long userId, Long restaurantId, LocalDate from, LocalDate to) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
-        if (!restaurant.getCompany().getOwner().getId().equals(userId)) {
-            throw new AccessDeniedException("You don't own this restaurant");
-        }
+        accessControlService.verifyCanManageRestaurant(userId, restaurant);
         if (from.isAfter(to)) {
             throw new ApiException(ErrorCode.VALIDATION_ERROR, "'from' must not be after 'to'");
         }

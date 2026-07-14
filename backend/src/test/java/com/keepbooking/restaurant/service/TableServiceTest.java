@@ -19,6 +19,7 @@ import org.springframework.security.access.AccessDeniedException;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.restaurant.dto.BatchUpdateTablesRequest;
 import com.keepbooking.restaurant.dto.CreateTableRequest;
 import com.keepbooking.restaurant.dto.TableDto;
@@ -31,6 +32,8 @@ import com.keepbooking.restaurant.model.RestaurantTable;
 import com.keepbooking.restaurant.repository.HallRepository;
 import com.keepbooking.restaurant.repository.TableRepository;
 import com.keepbooking.user.model.User;
+import com.keepbooking.user.model.UserRole;
+import com.keepbooking.user.repository.UserRepository;
 
 /**
  * batchUpdatePositions has logic distinct from Hall/Table CRUD: it loads all tables of a
@@ -44,21 +47,29 @@ class TableServiceTest {
     private TableRepository tableRepository;
     @Mock
     private HallRepository hallRepository;
+    @Mock
+    private UserRepository userRepository;
 
     private TableService tableService;
 
     private static final Long OWNER_ID = 1L;
     private static final Long OTHER_USER_ID = 2L;
+    private static final Long COMPANY_ID = 1L;
     private static final Long HALL_ID = 10L;
     private static final Long TABLE_ID = 100L;
 
     @BeforeEach
     void setUp() {
-        tableService = new TableService(tableRepository, hallRepository);
+        tableService = new TableService(tableRepository, hallRepository, new AccessControlService(userRepository));
+    }
+
+    private void stubOwner() {
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(
+                User.builder().id(OWNER_ID).role(UserRole.ROLE_COMPANY_ADMIN).companyId(COMPANY_ID).build()));
     }
 
     private Hall hallOwnedBy(Long ownerId) {
-        Company company = Company.builder().id(1L).owner(User.builder().id(ownerId).build()).name("Co").build();
+        Company company = Company.builder().id(COMPANY_ID).name("Co").build();
         Restaurant restaurant = Restaurant.builder().id(1L).company(company).name("Restaurant").build();
         return Hall.builder().id(HALL_ID).restaurant(restaurant).name("Main Hall").build();
     }
@@ -107,6 +118,7 @@ class TableServiceTest {
 
     @Test
     void createSavesTableWithGivenFields() {
+        stubOwner();
         when(hallRepository.findById(HALL_ID)).thenReturn(Optional.of(hallOwnedBy(OWNER_ID)));
         when(tableRepository.save(any(RestaurantTable.class))).thenAnswer(inv -> {
             RestaurantTable t = inv.getArgument(0);
@@ -142,6 +154,7 @@ class TableServiceTest {
 
     @Test
     void updateOnlyChangesProvidedFieldsLeavingOthersUntouched() {
+        stubOwner();
         Hall hall = hallOwnedBy(OWNER_ID);
         RestaurantTable table = tableIn(hall);
         table.setMinCapacity(2);
@@ -186,6 +199,7 @@ class TableServiceTest {
 
     @Test
     void batchUpdatePositionsThrowsTableNotFoundWhenIdIsNotInThisHall() {
+        stubOwner();
         Hall hall = hallOwnedBy(OWNER_ID);
         when(hallRepository.findById(HALL_ID)).thenReturn(Optional.of(hall));
         when(tableRepository.findByHallId(HALL_ID)).thenReturn(List.of(tableIn(hall)));
@@ -203,6 +217,7 @@ class TableServiceTest {
 
     @Test
     void batchUpdatePositionsUpdatesOnlyPositionFieldsLeavingCapacityAndNumberUntouched() {
+        stubOwner();
         Hall hall = hallOwnedBy(OWNER_ID);
         RestaurantTable table = tableIn(hall);
         when(hallRepository.findById(HALL_ID)).thenReturn(Optional.of(hall));
@@ -249,6 +264,7 @@ class TableServiceTest {
 
     @Test
     void deleteSucceedsForOwner() {
+        stubOwner();
         Hall hall = hallOwnedBy(OWNER_ID);
         RestaurantTable table = tableIn(hall);
         when(tableRepository.findById(TABLE_ID)).thenReturn(Optional.of(table));

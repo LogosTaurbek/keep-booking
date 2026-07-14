@@ -1,7 +1,6 @@
 package com.keepbooking.user.dto;
 
 import java.time.Instant;
-import java.util.Set;
 
 import com.keepbooking.user.model.UserRole;
 import com.keepbooking.user.model.UserStatus;
@@ -23,7 +22,9 @@ public class UserProfileDto {
     private String timezone;
     private UserStatus status;
     private Boolean emailVerified;
-    private Set<UserRole> roles;
+    private UserRole role;
+    private Long companyId;
+    private Long restaurantId;
     private Long cityId;
     private String cityName;
     private Long countryId;

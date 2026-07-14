@@ -10,7 +10,6 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +25,7 @@ import com.keepbooking.common.audit.AuditLogService;
 import com.keepbooking.common.dto.PageResponse;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.notification.model.NotificationType;
 import com.keepbooking.notification.service.NotificationService;
 import com.keepbooking.restaurant.model.Restaurant;
@@ -55,6 +55,7 @@ public class BookingService {
     private final MeterRegistry meterRegistry;
     private final WorkingHoursResolver workingHoursResolver;
     private final WaitlistService waitlistService;
+    private final AccessControlService accessControlService;
 
     @Transactional
     public BookingDto create(Long userId, CreateBookingRequest request, String idempotencyKey) {
@@ -145,11 +146,7 @@ public class BookingService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ApiException(ErrorCode.BOOKING_NOT_FOUND));
 
-        // No role check here by design (roles like RESTAURANT_ADMIN are never actually granted
-        // anywhere in the app) - owning the restaurant this booking belongs to is what makes
-        // someone its manager, matching the ownership pattern used by every other service
-        // (HallService, MenuItemService, AnalyticsService, ...).
-        boolean managesThisRestaurant = booking.getRestaurant().getCompany().getOwner().getId().equals(userId);
+        boolean managesThisRestaurant = accessControlService.canManageRestaurant(userId, booking.getRestaurant());
         if (!managesThisRestaurant && !booking.getUser().getId().equals(userId)) {
             throw new ApiException(ErrorCode.ACCESS_DENIED);
         }
@@ -208,9 +205,7 @@ public class BookingService {
     public PageResponse<BookingDto> getRestaurantBookings(Long userId, Long restaurantId, LocalDate from, LocalDate to, Pageable pageable) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
-        if (!restaurant.getCompany().getOwner().getId().equals(userId)) {
-            throw new AccessDeniedException("You don't own this restaurant");
-        }
+        accessControlService.verifyCanManageRestaurant(userId, restaurant);
 
         if (from == null && to == null) {
             return PageResponse.of(bookingRepository.findByRestaurantIdOrderByBookingDateDesc(restaurantId, pageable).map(this::toDto));

@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,6 +25,8 @@ import com.keepbooking.restaurant.dto.CreateRestaurantRequest;
 import com.keepbooking.restaurant.dto.RestaurantDto;
 import com.keepbooking.restaurant.dto.UpdateRestaurantRequest;
 import com.keepbooking.restaurant.service.RestaurantService;
+import com.keepbooking.user.dto.AssignAdminRequest;
+import com.keepbooking.user.dto.UserProfileDto;
 import com.keepbooking.user.model.User;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -99,5 +102,34 @@ public class RestaurantController {
                                                 @PathVariable Long id,
                                                 @Valid @RequestBody UpdateRestaurantRequest request) {
         return ResponseEntity.ok(restaurantService.update(user.getId(), id, request));
+    }
+
+    @Operation(summary = "List this restaurant's admins (company-admin only)")
+    @GetMapping("/{id}/admins")
+    @PreAuthorize("isAuthenticated()")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<List<UserProfileDto>> getAdmins(@AuthenticationPrincipal User user, @PathVariable Long id) {
+        return ResponseEntity.ok(restaurantService.getAdmins(user.getId(), id));
+    }
+
+    @Operation(summary = "Attach an already-registered user as this restaurant's admin (company-admin only)")
+    @PostMapping("/{id}/admins")
+    @PreAuthorize("isAuthenticated()")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<UserProfileDto> assignAdmin(@AuthenticationPrincipal User user,
+                                                        @PathVariable Long id,
+                                                        @Valid @RequestBody AssignAdminRequest request) {
+        return ResponseEntity.ok(restaurantService.assignAdmin(user.getId(), id, request.getEmail()));
+    }
+
+    @Operation(summary = "Revoke a restaurant admin (company-admin only)")
+    @DeleteMapping("/{id}/admins/{userId}")
+    @PreAuthorize("isAuthenticated()")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<Void> revokeAdmin(@AuthenticationPrincipal User user,
+                                             @PathVariable Long id,
+                                             @PathVariable Long userId) {
+        restaurantService.revokeAdmin(user.getId(), id, userId);
+        return ResponseEntity.noContent().build();
     }
 }

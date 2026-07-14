@@ -24,5 +24,6 @@
     <include file="db/changelog/migrations/V017__waitlist.sql"/>
     <include file="db/changelog/migrations/V018__analytics_read_model.sql"/>
     <include file="db/changelog/migrations/V019__review_owner_reply.sql"/>
+    <include file="db/changelog/migrations/V020__user_scope.sql"/>
 
 </databaseChangeLog>

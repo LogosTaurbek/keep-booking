@@ -21,6 +21,7 @@ import org.springframework.security.access.AccessDeniedException;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.restaurant.dto.UpsertWorkingHoursDayRequest;
 import com.keepbooking.restaurant.dto.UpsertWorkingHoursOverrideRequest;
 import com.keepbooking.restaurant.dto.WorkingHoursDto;
@@ -33,6 +34,8 @@ import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.restaurant.repository.WorkingHoursOverrideRepository;
 import com.keepbooking.restaurant.repository.WorkingHoursRepository;
 import com.keepbooking.user.model.User;
+import com.keepbooking.user.model.UserRole;
+import com.keepbooking.user.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 class WorkingHoursServiceTest {
@@ -43,21 +46,30 @@ class WorkingHoursServiceTest {
     private WorkingHoursOverrideRepository overrideRepository;
     @Mock
     private RestaurantRepository restaurantRepository;
+    @Mock
+    private UserRepository userRepository;
 
     private WorkingHoursService workingHoursService;
 
     private static final Long OWNER_ID = 1L;
     private static final Long OTHER_USER_ID = 2L;
+    private static final Long COMPANY_ID = 1L;
     private static final Long RESTAURANT_ID = 10L;
     private static final LocalDate DATE = LocalDate.of(2026, 12, 31);
 
     @BeforeEach
     void setUp() {
-        workingHoursService = new WorkingHoursService(workingHoursRepository, overrideRepository, restaurantRepository);
+        workingHoursService = new WorkingHoursService(
+                workingHoursRepository, overrideRepository, restaurantRepository, new AccessControlService(userRepository));
+    }
+
+    private void stubOwner() {
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(
+                User.builder().id(OWNER_ID).role(UserRole.ROLE_COMPANY_ADMIN).companyId(COMPANY_ID).build()));
     }
 
     private Restaurant restaurantOwnedBy(Long ownerId) {
-        Company company = Company.builder().id(1L).owner(User.builder().id(ownerId).build()).name("Co").build();
+        Company company = Company.builder().id(COMPANY_ID).name("Co").build();
         return Restaurant.builder().id(RESTAURANT_ID).company(company).name("Test Restaurant").build();
     }
 
@@ -90,6 +102,7 @@ class WorkingHoursServiceTest {
 
     @Test
     void upsertDayCreatesNewEntryWhenDayHasNoExistingSchedule() {
+        stubOwner();
         Restaurant restaurant = restaurantOwnedBy(OWNER_ID);
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
         when(workingHoursRepository.findByRestaurantIdAndDayOfWeek(RESTAURANT_ID, 2)).thenReturn(Optional.empty());
@@ -108,6 +121,7 @@ class WorkingHoursServiceTest {
 
     @Test
     void upsertDayUpdatesExistingEntryForThatDayInPlace() {
+        stubOwner();
         Restaurant restaurant = restaurantOwnedBy(OWNER_ID);
         WorkingHours existing = WorkingHours.builder().id(700L).restaurant(restaurant).dayOfWeek(1)
                 .openTime(LocalTime.of(8, 0)).closeTime(LocalTime.of(17, 0)).isDayOff(false).build();
@@ -124,6 +138,7 @@ class WorkingHoursServiceTest {
 
     @Test
     void upsertDayDefaultsIsDayOffToFalseWhenNull() {
+        stubOwner();
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
         when(workingHoursRepository.findByRestaurantIdAndDayOfWeek(RESTAURANT_ID, 1)).thenReturn(Optional.empty());
         when(workingHoursRepository.save(any(WorkingHours.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -135,6 +150,7 @@ class WorkingHoursServiceTest {
 
     @Test
     void upsertDayThrowsWhenOpenAndCloseTimeAreEqualAndDayIsNotOff() {
+        stubOwner();
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
 
         UpsertWorkingHoursDayRequest bad = dayRequest(false);
@@ -149,6 +165,7 @@ class WorkingHoursServiceTest {
 
     @Test
     void upsertDayThrowsWhenOpenOrCloseMissingAndDayIsNotOff() {
+        stubOwner();
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
 
         UpsertWorkingHoursDayRequest bad = dayRequest(false);
@@ -161,6 +178,7 @@ class WorkingHoursServiceTest {
 
     @Test
     void upsertDayAllowsOvernightScheduleWhereCloseIsBeforeOpen() {
+        stubOwner();
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
         when(workingHoursRepository.findByRestaurantIdAndDayOfWeek(RESTAURANT_ID, 5)).thenReturn(Optional.empty());
         when(workingHoursRepository.save(any(WorkingHours.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -220,6 +238,7 @@ class WorkingHoursServiceTest {
 
     @Test
     void upsertOverrideCreatesNewEntryForAHoliday() {
+        stubOwner();
         Restaurant restaurant = restaurantOwnedBy(OWNER_ID);
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
         when(overrideRepository.findByRestaurantIdAndDate(RESTAURANT_ID, DATE)).thenReturn(Optional.empty());
@@ -239,6 +258,7 @@ class WorkingHoursServiceTest {
 
     @Test
     void upsertOverrideReplacesExistingEntryForTheSameDate() {
+        stubOwner();
         Restaurant restaurant = restaurantOwnedBy(OWNER_ID);
         WorkingHoursOverride existing = WorkingHoursOverride.builder().id(500L).restaurant(restaurant).date(DATE)
                 .openTime(LocalTime.of(10, 0)).closeTime(LocalTime.of(16, 0)).isClosed(false).build();
@@ -256,6 +276,7 @@ class WorkingHoursServiceTest {
 
     @Test
     void upsertOverrideThrowsWhenNotClosedAndTimesMissing() {
+        stubOwner();
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
 
         assertThatThrownBy(() -> workingHoursService.upsertOverride(OWNER_ID, RESTAURANT_ID,
@@ -278,6 +299,7 @@ class WorkingHoursServiceTest {
 
     @Test
     void deleteOverrideSucceedsForOwner() {
+        stubOwner();
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
 
         workingHoursService.deleteOverride(OWNER_ID, RESTAURANT_ID, DATE);

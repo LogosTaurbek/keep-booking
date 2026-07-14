@@ -19,6 +19,7 @@ import org.springframework.security.access.AccessDeniedException;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.restaurant.dto.CreateMenuItemRequest;
 import com.keepbooking.restaurant.dto.MenuItemDto;
 import com.keepbooking.restaurant.dto.UpdateMenuItemRequest;
@@ -28,6 +29,8 @@ import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.repository.MenuItemRepository;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.user.model.User;
+import com.keepbooking.user.model.UserRole;
+import com.keepbooking.user.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 class MenuItemServiceTest {
@@ -36,21 +39,29 @@ class MenuItemServiceTest {
     private MenuItemRepository menuItemRepository;
     @Mock
     private RestaurantRepository restaurantRepository;
+    @Mock
+    private UserRepository userRepository;
 
     private MenuItemService menuItemService;
 
     private static final Long OWNER_ID = 1L;
     private static final Long OTHER_USER_ID = 2L;
+    private static final Long COMPANY_ID = 1L;
     private static final Long RESTAURANT_ID = 10L;
     private static final Long ITEM_ID = 100L;
 
     @BeforeEach
     void setUp() {
-        menuItemService = new MenuItemService(menuItemRepository, restaurantRepository);
+        menuItemService = new MenuItemService(menuItemRepository, restaurantRepository, new AccessControlService(userRepository));
+    }
+
+    private void stubOwner() {
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(
+                User.builder().id(OWNER_ID).role(UserRole.ROLE_COMPANY_ADMIN).companyId(COMPANY_ID).build()));
     }
 
     private Restaurant restaurantOwnedBy(Long ownerId) {
-        Company company = Company.builder().id(1L).owner(User.builder().id(ownerId).build()).name("Co").build();
+        Company company = Company.builder().id(COMPANY_ID).name("Co").build();
         return Restaurant.builder().id(RESTAURANT_ID).company(company).name("Test Restaurant").build();
     }
 
@@ -88,6 +99,7 @@ class MenuItemServiceTest {
 
     @Test
     void createDefaultsPositionToZeroWhenNotProvided() {
+        stubOwner();
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
         when(menuItemRepository.save(any(MenuItem.class))).thenAnswer(inv -> {
             MenuItem m = inv.getArgument(0);
@@ -123,6 +135,7 @@ class MenuItemServiceTest {
 
     @Test
     void updateOnlyChangesProvidedFieldsLeavingOthersUntouched() {
+        stubOwner();
         MenuItem item = itemIn(restaurantOwnedBy(OWNER_ID));
         item.setDescription("Old description");
         when(menuItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
@@ -161,6 +174,7 @@ class MenuItemServiceTest {
 
     @Test
     void deleteSucceedsForOwner() {
+        stubOwner();
         MenuItem item = itemIn(restaurantOwnedBy(OWNER_ID));
         when(menuItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
 

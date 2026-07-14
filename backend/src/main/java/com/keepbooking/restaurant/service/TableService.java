@@ -5,19 +5,18 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.restaurant.dto.BatchUpdateTablesRequest;
 import com.keepbooking.restaurant.dto.CreateTableRequest;
 import com.keepbooking.restaurant.dto.TableDto;
 import com.keepbooking.restaurant.dto.TablePositionItem;
 import com.keepbooking.restaurant.dto.UpdateTableRequest;
 import com.keepbooking.restaurant.model.Hall;
-import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.model.RestaurantTable;
 import com.keepbooking.restaurant.repository.HallRepository;
 import com.keepbooking.restaurant.repository.TableRepository;
@@ -30,11 +29,12 @@ public class TableService {
 
     private final TableRepository tableRepository;
     private final HallRepository hallRepository;
+    private final AccessControlService accessControlService;
 
     @Transactional
     public TableDto create(Long userId, CreateTableRequest request) {
         Hall hall = findHall(request.getHallId());
-        verifyOwner(hall, userId);
+        accessControlService.verifyCanManageRestaurant(userId, hall.getRestaurant());
 
         RestaurantTable table = RestaurantTable.builder()
                 .hall(hall)
@@ -72,7 +72,7 @@ public class TableService {
     @Transactional
     public TableDto update(Long userId, Long tableId, UpdateTableRequest request) {
         RestaurantTable table = findTable(tableId);
-        verifyOwner(table.getHall(), userId);
+        accessControlService.verifyCanManageRestaurant(userId, table.getHall().getRestaurant());
 
         if (request.getNumber() != null) table.setNumber(request.getNumber());
         if (request.getCapacity() != null) table.setCapacity(request.getCapacity());
@@ -97,7 +97,7 @@ public class TableService {
     @Transactional
     public List<TableDto> batchUpdatePositions(Long userId, BatchUpdateTablesRequest request) {
         Hall hall = findHall(request.getHallId());
-        verifyOwner(hall, userId);
+        accessControlService.verifyCanManageRestaurant(userId, hall.getRestaurant());
 
         Map<Long, RestaurantTable> tablesById = tableRepository.findByHallId(hall.getId()).stream()
                 .collect(Collectors.toMap(RestaurantTable::getId, Function.identity()));
@@ -117,7 +117,7 @@ public class TableService {
     @Transactional
     public void delete(Long userId, Long tableId) {
         RestaurantTable table = findTable(tableId);
-        verifyOwner(table.getHall(), userId);
+        accessControlService.verifyCanManageRestaurant(userId, table.getHall().getRestaurant());
         tableRepository.delete(table);
     }
 
@@ -137,13 +137,6 @@ public class TableService {
     private RestaurantTable findTable(Long tableId) {
         return tableRepository.findById(tableId)
                 .orElseThrow(() -> new ApiException(ErrorCode.TABLE_NOT_FOUND));
-    }
-
-    private void verifyOwner(Hall hall, Long userId) {
-        Restaurant restaurant = hall.getRestaurant();
-        if (!restaurant.getCompany().getOwner().getId().equals(userId)) {
-            throw new AccessDeniedException("You don't own this restaurant");
-        }
     }
 
     private TableDto toDto(RestaurantTable t) {

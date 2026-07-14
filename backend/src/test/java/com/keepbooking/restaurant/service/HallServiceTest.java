@@ -18,6 +18,7 @@ import org.springframework.security.access.AccessDeniedException;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.restaurant.dto.CreateHallRequest;
 import com.keepbooking.restaurant.dto.HallDto;
 import com.keepbooking.restaurant.dto.UpdateHallRequest;
@@ -27,11 +28,14 @@ import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.repository.HallRepository;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.user.model.User;
+import com.keepbooking.user.model.UserRole;
+import com.keepbooking.user.repository.UserRepository;
 
 /**
  * Ownership checks (tz2.txt §4: "RESTAURANT_ADMIN может редактировать только рестораны
- * своей компании") — this pattern (restaurant.company.owner.id == userId) is shared by
- * Hall/Table/MenuItem/RestaurantPhoto services; testing it thoroughly here covers the shape.
+ * своей компании") - the actual authorization matrix (SUPER_ADMIN/COMPANY_ADMIN/RESTAURANT_ADMIN
+ * scope) is exhaustively tested in AccessControlServiceTest; here we only verify this service
+ * correctly delegates to it.
  */
 @ExtendWith(MockitoExtension.class)
 class HallServiceTest {
@@ -40,21 +44,29 @@ class HallServiceTest {
     private HallRepository hallRepository;
     @Mock
     private RestaurantRepository restaurantRepository;
+    @Mock
+    private UserRepository userRepository;
 
     private HallService hallService;
 
     private static final Long OWNER_ID = 1L;
     private static final Long OTHER_USER_ID = 2L;
+    private static final Long COMPANY_ID = 1L;
     private static final Long RESTAURANT_ID = 10L;
     private static final Long HALL_ID = 100L;
 
     @BeforeEach
     void setUp() {
-        hallService = new HallService(hallRepository, restaurantRepository);
+        hallService = new HallService(hallRepository, restaurantRepository, new AccessControlService(userRepository));
     }
 
-    private Restaurant restaurantOwnedBy(Long ownerId) {
-        Company company = Company.builder().id(1L).owner(User.builder().id(ownerId).build()).name("Co").build();
+    private void stubOwner() {
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(
+                User.builder().id(OWNER_ID).role(UserRole.ROLE_COMPANY_ADMIN).companyId(COMPANY_ID).build()));
+    }
+
+    private Restaurant restaurantInCompany() {
+        Company company = Company.builder().id(COMPANY_ID).name("Co").build();
         return Restaurant.builder().id(RESTAURANT_ID).company(company).name("Test Restaurant").build();
     }
 
@@ -76,7 +88,7 @@ class HallServiceTest {
 
     @Test
     void createThrowsAccessDeniedWhenActorDoesNotOwnTheRestaurant() {
-        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantInCompany()));
 
         assertThatThrownBy(() -> hallService.create(OTHER_USER_ID, createRequest()))
                 .isInstanceOf(AccessDeniedException.class);
@@ -86,7 +98,8 @@ class HallServiceTest {
 
     @Test
     void createAppliesDefaultsWhenOptionalFieldsAreNull() {
-        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
+        stubOwner();
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantInCompany()));
         when(hallRepository.save(any(Hall.class))).thenAnswer(inv -> {
             Hall h = inv.getArgument(0);
             h.setId(HALL_ID);
@@ -111,7 +124,7 @@ class HallServiceTest {
 
     @Test
     void updateThrowsAccessDeniedWhenActorDoesNotOwnTheRestaurant() {
-        Hall hall = Hall.builder().id(HALL_ID).restaurant(restaurantOwnedBy(OWNER_ID)).name("Hall").build();
+        Hall hall = Hall.builder().id(HALL_ID).restaurant(restaurantInCompany()).name("Hall").build();
         when(hallRepository.findById(HALL_ID)).thenReturn(Optional.of(hall));
 
         assertThatThrownBy(() -> hallService.update(OTHER_USER_ID, HALL_ID, new UpdateHallRequest()))
@@ -122,7 +135,8 @@ class HallServiceTest {
 
     @Test
     void updateOnlyChangesProvidedFieldsLeavingOthersUntouched() {
-        Hall hall = Hall.builder().id(HALL_ID).restaurant(restaurantOwnedBy(OWNER_ID))
+        stubOwner();
+        Hall hall = Hall.builder().id(HALL_ID).restaurant(restaurantInCompany())
                 .name("Old Name").floor(1).canvasWidth(800).canvasHeight(600).build();
         when(hallRepository.findById(HALL_ID)).thenReturn(Optional.of(hall));
         when(hallRepository.save(any(Hall.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -150,7 +164,7 @@ class HallServiceTest {
 
     @Test
     void deleteThrowsAccessDeniedWhenActorDoesNotOwnTheRestaurant() {
-        Hall hall = Hall.builder().id(HALL_ID).restaurant(restaurantOwnedBy(OWNER_ID)).name("Hall").build();
+        Hall hall = Hall.builder().id(HALL_ID).restaurant(restaurantInCompany()).name("Hall").build();
         when(hallRepository.findById(HALL_ID)).thenReturn(Optional.of(hall));
 
         assertThatThrownBy(() -> hallService.delete(OTHER_USER_ID, HALL_ID))
@@ -161,7 +175,8 @@ class HallServiceTest {
 
     @Test
     void deleteSucceedsForOwner() {
-        Hall hall = Hall.builder().id(HALL_ID).restaurant(restaurantOwnedBy(OWNER_ID)).name("Hall").build();
+        stubOwner();
+        Hall hall = Hall.builder().id(HALL_ID).restaurant(restaurantInCompany()).name("Hall").build();
         when(hallRepository.findById(HALL_ID)).thenReturn(Optional.of(hall));
 
         hallService.delete(OWNER_ID, HALL_ID);

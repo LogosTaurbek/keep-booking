@@ -2,12 +2,12 @@ package com.keepbooking.restaurant.service;
 
 import java.util.List;
 
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.restaurant.dto.CreateMenuItemRequest;
 import com.keepbooking.restaurant.dto.MenuItemDto;
 import com.keepbooking.restaurant.dto.UpdateMenuItemRequest;
@@ -24,12 +24,13 @@ public class MenuItemService {
 
     private final MenuItemRepository menuItemRepository;
     private final RestaurantRepository restaurantRepository;
+    private final AccessControlService accessControlService;
 
     @Transactional
     public MenuItemDto create(Long userId, CreateMenuItemRequest request) {
         Restaurant restaurant = restaurantRepository.findById(request.getRestaurantId())
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
-        verifyOwner(restaurant, userId);
+        accessControlService.verifyCanManageRestaurant(userId, restaurant);
 
         MenuItem item = MenuItem.builder()
                 .restaurant(restaurant)
@@ -59,7 +60,7 @@ public class MenuItemService {
     @Transactional
     public MenuItemDto update(Long userId, Long id, UpdateMenuItemRequest request) {
         MenuItem item = findItem(id);
-        verifyOwner(item.getRestaurant(), userId);
+        accessControlService.verifyCanManageRestaurant(userId, item.getRestaurant());
 
         if (request.getName() != null) item.setName(request.getName());
         if (request.getDescription() != null) item.setDescription(request.getDescription());
@@ -75,19 +76,13 @@ public class MenuItemService {
     @Transactional
     public void delete(Long userId, Long id) {
         MenuItem item = findItem(id);
-        verifyOwner(item.getRestaurant(), userId);
+        accessControlService.verifyCanManageRestaurant(userId, item.getRestaurant());
         menuItemRepository.delete(item);
     }
 
     private MenuItem findItem(Long id) {
         return menuItemRepository.findById(id)
                 .orElseThrow(() -> new ApiException(ErrorCode.MENU_ITEM_NOT_FOUND));
-    }
-
-    private void verifyOwner(Restaurant restaurant, Long userId) {
-        if (!restaurant.getCompany().getOwner().getId().equals(userId)) {
-            throw new AccessDeniedException("You don't own this restaurant");
-        }
     }
 
     private MenuItemDto toDto(MenuItem m) {

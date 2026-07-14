@@ -12,13 +12,13 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.keepbooking.common.dto.PageResponse;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.reference.model.City;
 import com.keepbooking.reference.model.Cuisine;
 import com.keepbooking.reference.repository.CityRepository;
@@ -32,6 +32,11 @@ import com.keepbooking.restaurant.model.RestaurantStatus;
 import com.keepbooking.restaurant.repository.CompanyRepository;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.restaurant.repository.RestaurantSpecifications;
+import com.keepbooking.user.dto.UserProfileDto;
+import com.keepbooking.user.mapper.UserMapper;
+import com.keepbooking.user.model.User;
+import com.keepbooking.user.model.UserRole;
+import com.keepbooking.user.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -43,10 +48,14 @@ public class RestaurantService {
     private final CompanyRepository companyRepository;
     private final CityRepository cityRepository;
     private final CuisineRepository cuisineRepository;
+    private final UserRepository userRepository;
+    private final UserMapper userMapper;
+    private final AccessControlService accessControlService;
 
     @Transactional
     public RestaurantDto create(Long userId, CreateRestaurantRequest request) {
-        Company company = companyRepository.findByIdAndOwnerId(request.getCompanyId(), userId)
+        accessControlService.verifyCanManageCompany(userId, request.getCompanyId());
+        Company company = companyRepository.findById(request.getCompanyId())
                 .orElseThrow(() -> new ApiException(ErrorCode.COMPANY_NOT_FOUND));
 
         City city = request.getCityId() != null
@@ -105,12 +114,21 @@ public class RestaurantService {
         return PageResponse.of(page.map(this::toDto));
     }
 
+    /**
+     * A COMPANY_ADMIN sees every restaurant under their company; a RESTAURANT_ADMIN sees only
+     * the one restaurant they're scoped to (see V020 / AccessControlService).
+     */
     @Transactional(readOnly = true)
     public List<RestaurantDto> getMyRestaurants(Long userId) {
-        return companyRepository.findByOwnerId(userId).stream()
-                .flatMap(c -> restaurantRepository.findByCompanyId(c.getId()).stream())
-                .map(this::toDto)
-                .toList();
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
+        if (user.getCompanyId() == null) {
+            return List.of();
+        }
+        if (user.getRole() == UserRole.ROLE_RESTAURANT_ADMIN && user.getRestaurantId() != null) {
+            return restaurantRepository.findById(user.getRestaurantId()).map(this::toDto).map(List::of).orElse(List.of());
+        }
+        return restaurantRepository.findByCompanyId(user.getCompanyId()).stream().map(this::toDto).toList();
     }
 
     @Transactional(readOnly = true)
@@ -127,9 +145,7 @@ public class RestaurantService {
     public RestaurantDto update(Long userId, Long restaurantId, UpdateRestaurantRequest request) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
-        if (!restaurant.getCompany().getOwner().getId().equals(userId)) {
-            throw new AccessDeniedException("You don't own this restaurant");
-        }
+        accessControlService.verifyCanManageRestaurant(userId, restaurant);
 
         if (request.getName() != null) restaurant.setName(request.getName());
         if (request.getDescription() != null) restaurant.setDescription(request.getDescription());
@@ -147,6 +163,59 @@ public class RestaurantService {
         }
 
         return toDto(restaurantRepository.save(restaurant));
+    }
+
+    /**
+     * Attaches an already-registered user (by email) as RESTAURANT_ADMIN of one specific
+     * restaurant. Gated at company level (not just restaurant level) - a RESTAURANT_ADMIN
+     * shouldn't be able to hand out access to their own restaurant to someone else.
+     */
+    @Transactional
+    public UserProfileDto assignAdmin(Long actorId, Long restaurantId, String targetEmail) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
+        accessControlService.verifyCanManageCompany(actorId, restaurant.getCompany().getId());
+
+        User target = userRepository.findByEmailAndDeletedAtIsNull(targetEmail)
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
+        Long companyId = restaurant.getCompany().getId();
+        if (target.getCompanyId() != null && !target.getCompanyId().equals(companyId)) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "User already belongs to a different company");
+        }
+
+        target.setRole(UserRole.ROLE_RESTAURANT_ADMIN);
+        target.setCompanyId(companyId);
+        target.setRestaurantId(restaurantId);
+
+        return userMapper.toDto(userRepository.save(target));
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserProfileDto> getAdmins(Long actorId, Long restaurantId) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
+        accessControlService.verifyCanManageCompany(actorId, restaurant.getCompany().getId());
+        return userRepository.findByRestaurantIdAndRole(restaurantId, UserRole.ROLE_RESTAURANT_ADMIN).stream()
+                .map(userMapper::toDto)
+                .toList();
+    }
+
+    @Transactional
+    public void revokeAdmin(Long actorId, Long restaurantId, Long targetUserId) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
+        accessControlService.verifyCanManageCompany(actorId, restaurant.getCompany().getId());
+
+        User target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
+        if (target.getRole() != UserRole.ROLE_RESTAURANT_ADMIN || !restaurantId.equals(target.getRestaurantId())) {
+            throw new ApiException(ErrorCode.VALIDATION_ERROR, "User is not an admin of this restaurant");
+        }
+
+        target.setRole(UserRole.ROLE_USER);
+        target.setCompanyId(null);
+        target.setRestaurantId(null);
+        userRepository.save(target);
     }
 
     @Caching(evict = {

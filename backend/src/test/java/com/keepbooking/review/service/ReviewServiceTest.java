@@ -24,6 +24,7 @@ import com.keepbooking.booking.model.BookingStatus;
 import com.keepbooking.booking.repository.BookingRepository;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.restaurant.model.Company;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
@@ -34,6 +35,8 @@ import com.keepbooking.review.dto.ReviewDto;
 import com.keepbooking.review.model.Review;
 import com.keepbooking.review.repository.ReviewRepository;
 import com.keepbooking.user.model.User;
+import com.keepbooking.user.model.UserRole;
+import com.keepbooking.user.repository.UserRepository;
 
 /**
  * "Отзыв можно оставить только после брони со статусом COMPLETED, и не более одного
@@ -50,16 +53,25 @@ class ReviewServiceTest {
     private RestaurantRepository restaurantRepository;
     @Mock
     private RestaurantService restaurantService;
+    @Mock
+    private UserRepository userRepository;
 
     private ReviewService reviewService;
 
     private static final Long USER_ID = 1L;
     private static final Long BOOKING_ID = 100L;
     private static final Long RESTAURANT_OWNER_ID = 300L;
+    private static final Long COMPANY_ID = 1L;
 
     @BeforeEach
     void setUp() {
-        reviewService = new ReviewService(reviewRepository, bookingRepository, restaurantRepository, restaurantService);
+        reviewService = new ReviewService(
+                reviewRepository, bookingRepository, restaurantRepository, restaurantService, new AccessControlService(userRepository));
+    }
+
+    private void stubOwner() {
+        when(userRepository.findById(RESTAURANT_OWNER_ID)).thenReturn(Optional.of(
+                User.builder().id(RESTAURANT_OWNER_ID).role(UserRole.ROLE_COMPANY_ADMIN).companyId(COMPANY_ID).build()));
     }
 
     private User user() {
@@ -67,8 +79,7 @@ class ReviewServiceTest {
     }
 
     private Restaurant restaurant() {
-        Company company = Company.builder().id(1L).name("Test Co")
-                .owner(User.builder().id(RESTAURANT_OWNER_ID).build()).build();
+        Company company = Company.builder().id(COMPANY_ID).name("Test Co").build();
         return Restaurant.builder().id(1L).name("Test Restaurant").company(company)
                 .rating(BigDecimal.ZERO).reviewsCount(0).build();
     }
@@ -203,6 +214,7 @@ class ReviewServiceTest {
 
     @Test
     void replySetsOwnerReplyAndOwnerReplyAtForTheOwner() {
+        stubOwner();
         Review review = Review.builder().id(1L).restaurant(restaurant()).user(user()).booking(completedBooking()).rating(5).build();
         when(reviewRepository.findById(1L)).thenReturn(Optional.of(review));
         when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -235,6 +247,7 @@ class ReviewServiceTest {
 
     @Test
     void getByRestaurantForOwnerReturnsReviewsForTheOwner() {
+        stubOwner();
         Restaurant restaurant = restaurant();
         Review review = Review.builder().id(1L).restaurant(restaurant).user(user()).booking(completedBooking()).rating(5).build();
         when(restaurantRepository.findById(1L)).thenReturn(Optional.of(restaurant));

@@ -136,9 +136,8 @@ class BookingConcurrencyIntegrationTest {
     }
 
     private RestaurantTable createActiveTableWithCapacity(int capacity) {
-        User owner = saveUser("concurrency-owner@test.com");
         Company company = companyRepository.save(Company.builder()
-                .owner(owner).name("Concurrency Test Co").status(CompanyStatus.ACTIVE).build());
+                .name("Concurrency Test Co").status(CompanyStatus.ACTIVE).build());
         Restaurant restaurant = restaurantRepository.save(Restaurant.builder()
                 .company(company).name("Concurrency Test Restaurant").status(RestaurantStatus.ACTIVE).build());
         Hall hall = hallRepository.save(Hall.builder().restaurant(restaurant).name("Main Hall").build());

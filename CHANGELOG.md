@@ -2,6 +2,28 @@
 
 Формат по мотивам [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/). Версий/тегов пока нет — записи сгруппированы по дате.
 
+## [Unreleased] — 2026-07-15
+
+### Changed — Переработана модель ролей: scope прямо на аккаунте вместо Company.owner + Set<Role>
+Крупная переделка авторизации по запросу пользователя. Раньше: один `Company.owner` (`@ManyToOne User`) на компанию, `User.roles` — `Set<UserRole>` через отдельную таблицу `user_roles`, но фактически только `ROLE_USER` вообще когда-либо выдавался — `ROLE_COMPANY_ADMIN`/`ROLE_RESTAURANT_ADMIN` были мёртвым кодом (см. запись от 2026-07-13 про баг с недостижимой ролью). Новая модель: `role` — скалярное поле, `company_id`/`restaurant_id` — nullable-колонки прямо на `users`.
+
+- **Миграция `V020__user_scope.sql`**: добавляет `users.role` (scalar, `CHECK IN (...)`), `users.company_id`, `users.restaurant_id`; переносит данные — владелец компании (`companies.owner_user_id`) становится `ROLE_COMPANY_ADMIN` с этим `company_id`, прежний `ROLE_SUPER_ADMIN` из `user_roles` сохраняется; дропает `user_roles` и `companies.owner_user_id`; добавляет `CHECK` constraint `chk_users_role_scope`, физически запрещающий невалидные комбинации (например, `RESTAURANT_ADMIN` без `restaurant_id`)
+- Семантика scope: `ROLE_USER`/`ROLE_SUPER_ADMIN` — оба поля `NULL`; `ROLE_COMPANY_ADMIN` — `company_id` задан, управляет **всеми** ресторанами компании; `ROLE_RESTAURANT_ADMIN` — оба поля заданы, управляет **только** одним конкретным рестораном. Несколько аккаунтов могут иметь один и тот же `company_id` (несколько company-admin на компанию) — join-таблица для этого не понадобилась
+- **`AccessControlService`** (`common/security`) — единая точка входа для проверки прав, заменяет вручную разбросанный по 10 сервисам `restaurant.getCompany().getOwner().getId().equals(userId)`: `canManageCompany`/`canManageRestaurant` (bool) + `verifyCanManage*` (throwing). `SUPER_ADMIN` пропускается всегда; `COMPANY_ADMIN` — если `company_id` совпадает; `RESTAURANT_ADMIN` — если и `company_id`, и `restaurant_id` совпадают. Один поход в БД (`userRepository.findById(actorId)`) на проверку, без лишних join-таблиц
+- Переписаны все сервисы, ранее делавшие owner-check напрямую: `HallService`, `MenuItemService`, `TableService`, `WorkingHoursService`, `RestaurantPhotoService`, `AnalyticsService`, `ReviewService`, `BookingService`, `RestaurantService`, `CompanyService` — теперь все вызывают `AccessControlService`, ни один не трогает `Company.owner` (поле удалено из entity)
+- `CompanyService.create()` (самостоятельное онбординг) теперь дополнительно сразу повышает создателя до `ROLE_COMPANY_ADMIN` с `companyId` новой компании — раньше это делало поле `owner`, неявно
+- `RestaurantService.getMyRestaurants()` — новая семантика: company-admin видит все рестораны компании, restaurant-admin — только один свой (раньше — агрегация по всем компаниям, которыми владеет юзер, что всегда была ровно одна)
+
+### Added — Онбординг для SUPER_ADMIN и назначение админов
+- `POST /api/v1/admin/companies` — создание компании от лица клиента (support-assisted онбординг), сразу `ACTIVE`, без привязанного админа
+- `POST /api/v1/admin/companies/{id}/admins` / `GET .../admins` / `DELETE .../admins/{userId}` — назначить/посмотреть/отозвать `COMPANY_ADMIN` по email уже зарегистрированного пользователя. Доступно `SUPER_ADMIN` и существующим `COMPANY_ADMIN` этой же компании (добавление со-админа) — один и тот же `AccessControlService.verifyCanManageCompany` покрывает оба случая
+- `POST /api/v1/restaurants/{id}/admins` / `GET .../admins` / `DELETE .../admins/{userId}` — назначить/посмотреть/отозвать `RESTAURANT_ADMIN` конкретного ресторана. Нарочно гейтится на уровне компании (`verifyCanManageCompany`, не `verifyCanManageRestaurant`) — иначе restaurant-admin мог бы сам себе завести соседей по ресторану
+- Новый `UserRepository.findByCompanyIdAndRole`/`findByRestaurantIdAndRole` под списочные эндпоинты
+- `UserProfileDto` обновлён под новую модель: `Set<UserRole> roles` → `UserRole role` + `companyId`/`restaurantId`
+- 20+ новых unit-тестов: `AccessControlServiceTest` — единственное место, где исчерпывающе протестирована вся матрица SUPER_ADMIN/COMPANY_ADMIN/RESTAURANT_ADMIN × company/restaurant (остальные сервисы теперь просто тестируют делегирование, не переизобретают матрицу); плюс assign/revoke/getAdmins тесты в `CompanyServiceTest`/`RestaurantServiceTest`
+- Полный прогон бэкенд-тестов: 279/281 (2 падения — известное ограничение песочницы на Testcontainers, не регрессия)
+- Проверено вживую через curl полным сценарием: SUPER_ADMIN создаёт компанию «Вкусно и точка» → клиент регистрируется → SUPER_ADMIN привязывает его как company-admin → тот создаёт 3 ресторана и назначает менеджера на один → менеджер (RESTAURANT_ADMIN) видит только «свой» ресторан, не два других; не может создавать рестораны (403, company-level action); company-admin по-прежнему управляет всеми тремя. Отдельно проверено, что IDOR-изоляция не пострадала — RESTAURANT_ADMIN получает 403 на PATCH соседнего ресторана той же компании
+
 ## [Unreleased] — 2026-07-13
 
 ### Added — Ответ владельца на отзыв (owner reply)

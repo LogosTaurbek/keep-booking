@@ -25,10 +25,13 @@ import com.keepbooking.analytics.repository.RestaurantDailyTableStatsRepository;
 import com.keepbooking.booking.repository.BookingRepository;
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.restaurant.model.Company;
 import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
 import com.keepbooking.user.model.User;
+import com.keepbooking.user.model.UserRole;
+import com.keepbooking.user.repository.UserRepository;
 
 /**
  * tz2.txt §15/§25: AnalyticsService reads from the daily-rollup read model (status sums, hour/
@@ -48,11 +51,14 @@ class AnalyticsServiceTest {
     private RestaurantDailyHourStatsRepository hourStatsRepository;
     @Mock
     private RestaurantDailyTableStatsRepository tableStatsRepository;
+    @Mock
+    private UserRepository userRepository;
 
     private AnalyticsService analyticsService;
 
     private static final Long OWNER_ID = 1L;
     private static final Long OTHER_USER_ID = 2L;
+    private static final Long COMPANY_ID = 1L;
     private static final Long RESTAURANT_ID = 10L;
     private static final LocalDate FROM = LocalDate.of(2026, 1, 1);
     private static final LocalDate TO = LocalDate.of(2026, 1, 31);
@@ -60,11 +66,16 @@ class AnalyticsServiceTest {
     @BeforeEach
     void setUp() {
         analyticsService = new AnalyticsService(restaurantRepository, bookingRepository,
-                dailyStatsRepository, hourStatsRepository, tableStatsRepository);
+                dailyStatsRepository, hourStatsRepository, tableStatsRepository, new AccessControlService(userRepository));
+    }
+
+    private void stubOwner() {
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(
+                User.builder().id(OWNER_ID).role(UserRole.ROLE_COMPANY_ADMIN).companyId(COMPANY_ID).build()));
     }
 
     private Restaurant restaurantOwnedBy(Long ownerId) {
-        Company company = Company.builder().id(1L).owner(User.builder().id(ownerId).build()).name("Co").build();
+        Company company = Company.builder().id(COMPANY_ID).name("Co").build();
         return Restaurant.builder().id(RESTAURANT_ID).company(company).name("Test Restaurant").build();
     }
 
@@ -87,6 +98,7 @@ class AnalyticsServiceTest {
 
     @Test
     void throwsValidationErrorWhenFromIsAfterTo() {
+        stubOwner();
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
 
         assertThatThrownBy(() -> analyticsService.getRestaurantAnalytics(OWNER_ID, RESTAURANT_ID, TO, FROM))
@@ -96,6 +108,7 @@ class AnalyticsServiceTest {
 
     @Test
     void aggregatesStatusCountsAndComputesConfirmationRate() {
+        stubOwner();
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
         // pending, confirmed, rejected, cancelled, completed, noShow
         when(dailyStatsRepository.sumStatusCounts(eq(RESTAURANT_ID), eq(FROM), eq(TO)))
@@ -127,6 +140,7 @@ class AnalyticsServiceTest {
 
     @Test
     void confirmationRateIsZeroWhenAllBookingsAreStillPending() {
+        stubOwner();
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurantOwnedBy(OWNER_ID)));
         when(dailyStatsRepository.sumStatusCounts(eq(RESTAURANT_ID), eq(FROM), eq(TO)))
                 .thenReturn(List.<Object[]>of(new Object[]{5L, 0L, 0L, 0L, 0L, 0L}));

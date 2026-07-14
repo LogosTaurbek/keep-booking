@@ -19,6 +19,7 @@ import org.springframework.security.access.AccessDeniedException;
 
 import com.keepbooking.common.exception.ApiException;
 import com.keepbooking.common.exception.ErrorCode;
+import com.keepbooking.common.security.AccessControlService;
 import com.keepbooking.reference.repository.CityRepository;
 import com.keepbooking.reference.repository.CuisineRepository;
 import com.keepbooking.restaurant.dto.CreateRestaurantRequest;
@@ -29,7 +30,11 @@ import com.keepbooking.restaurant.model.Restaurant;
 import com.keepbooking.restaurant.model.RestaurantStatus;
 import com.keepbooking.restaurant.repository.CompanyRepository;
 import com.keepbooking.restaurant.repository.RestaurantRepository;
+import com.keepbooking.user.dto.UserProfileDto;
+import com.keepbooking.user.mapper.UserMapper;
 import com.keepbooking.user.model.User;
+import com.keepbooking.user.model.UserRole;
+import com.keepbooking.user.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 class RestaurantServiceTest {
@@ -42,6 +47,10 @@ class RestaurantServiceTest {
     private CityRepository cityRepository;
     @Mock
     private CuisineRepository cuisineRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private UserMapper userMapper;
 
     private RestaurantService restaurantService;
 
@@ -51,11 +60,17 @@ class RestaurantServiceTest {
 
     @BeforeEach
     void setUp() {
-        restaurantService = new RestaurantService(restaurantRepository, companyRepository, cityRepository, cuisineRepository);
+        restaurantService = new RestaurantService(restaurantRepository, companyRepository, cityRepository,
+                cuisineRepository, userRepository, userMapper, new AccessControlService(userRepository));
+    }
+
+    private void stubCompanyAdmin() {
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(
+                User.builder().id(OWNER_ID).role(UserRole.ROLE_COMPANY_ADMIN).companyId(COMPANY_ID).build()));
     }
 
     private Company company() {
-        return Company.builder().id(COMPANY_ID).owner(User.builder().id(OWNER_ID).build()).name("Co").build();
+        return Company.builder().id(COMPANY_ID).name("Co").build();
     }
 
     private Restaurant restaurant() {
@@ -71,8 +86,15 @@ class RestaurantServiceTest {
     }
 
     @Test
-    void createThrowsWhenActorDoesNotOwnTheCompany() {
-        when(companyRepository.findByIdAndOwnerId(COMPANY_ID, OWNER_ID)).thenReturn(Optional.empty());
+    void createThrowsAccessDeniedWhenActorDoesNotOwnTheCompany() {
+        assertThatThrownBy(() -> restaurantService.create(999L, createRequest()))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void createThrowsWhenCompanyNotFound() {
+        stubCompanyAdmin();
+        when(companyRepository.findById(COMPANY_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> restaurantService.create(OWNER_ID, createRequest()))
                 .isInstanceOf(ApiException.class)
@@ -81,7 +103,8 @@ class RestaurantServiceTest {
 
     @Test
     void createDefaultsTimezoneToUtcWhenNotProvided() {
-        when(companyRepository.findByIdAndOwnerId(COMPANY_ID, OWNER_ID)).thenReturn(Optional.of(company()));
+        stubCompanyAdmin();
+        when(companyRepository.findById(COMPANY_ID)).thenReturn(Optional.of(company()));
         when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> {
             Restaurant r = inv.getArgument(0);
             r.setId(RESTAURANT_ID);
@@ -113,12 +136,32 @@ class RestaurantServiceTest {
     }
 
     @Test
-    void getMyRestaurantsAggregatesAcrossAllOwnedCompanies() {
-        Company companyA = company();
-        Company companyB = Company.builder().id(6L).owner(User.builder().id(OWNER_ID).build()).name("Co B").build();
-        when(companyRepository.findByOwnerId(OWNER_ID)).thenReturn(List.of(companyA, companyB));
-        when(restaurantRepository.findByCompanyId(companyA.getId())).thenReturn(List.of(restaurant()));
-        when(restaurantRepository.findByCompanyId(companyB.getId())).thenReturn(List.of());
+    void getMyRestaurantsReturnsEmptyWhenActorHasNoCompany() {
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(
+                User.builder().id(OWNER_ID).role(UserRole.ROLE_USER).build()));
+
+        List<RestaurantDto> result = restaurantService.getMyRestaurants(OWNER_ID);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getMyRestaurantsReturnsAllRestaurantsInTheCompanyForACompanyAdmin() {
+        stubCompanyAdmin();
+        when(restaurantRepository.findByCompanyId(COMPANY_ID)).thenReturn(List.of(restaurant()));
+
+        List<RestaurantDto> result = restaurantService.getMyRestaurants(OWNER_ID);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getId()).isEqualTo(RESTAURANT_ID);
+    }
+
+    @Test
+    void getMyRestaurantsReturnsOnlyTheAssignedRestaurantForARestaurantAdmin() {
+        when(userRepository.findById(OWNER_ID)).thenReturn(Optional.of(
+                User.builder().id(OWNER_ID).role(UserRole.ROLE_RESTAURANT_ADMIN)
+                        .companyId(COMPANY_ID).restaurantId(RESTAURANT_ID).build()));
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
 
         List<RestaurantDto> result = restaurantService.getMyRestaurants(OWNER_ID);
 
@@ -187,6 +230,7 @@ class RestaurantServiceTest {
 
     @Test
     void updateAppliesOnlyNonNullFields() {
+        stubCompanyAdmin();
         Restaurant restaurant = restaurant();
         restaurant.setDescription("Old description");
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
@@ -199,5 +243,79 @@ class RestaurantServiceTest {
 
         assertThat(dto.getName()).isEqualTo("Renamed Restaurant");
         assertThat(dto.getDescription()).isEqualTo("Old description");
+    }
+
+    @Test
+    void assignAdminThrowsAccessDeniedWhenActorDoesNotManageTheCompany() {
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
+
+        assertThatThrownBy(() -> restaurantService.assignAdmin(999L, RESTAURANT_ID, "target@test.com"))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void assignAdminPromotesTargetUserToRestaurantAdmin() {
+        stubCompanyAdmin();
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
+        User target = User.builder().id(50L).email("target@test.com").role(UserRole.ROLE_USER).build();
+        when(userRepository.findByEmailAndDeletedAtIsNull("target@test.com")).thenReturn(Optional.of(target));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userMapper.toDto(any(User.class))).thenReturn(UserProfileDto.builder().id(50L).build());
+
+        restaurantService.assignAdmin(OWNER_ID, RESTAURANT_ID, "target@test.com");
+
+        assertThat(target.getRole()).isEqualTo(UserRole.ROLE_RESTAURANT_ADMIN);
+        assertThat(target.getCompanyId()).isEqualTo(COMPANY_ID);
+        assertThat(target.getRestaurantId()).isEqualTo(RESTAURANT_ID);
+    }
+
+    @Test
+    void getAdminsThrowsAccessDeniedWhenActorDoesNotManageTheCompany() {
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
+
+        assertThatThrownBy(() -> restaurantService.getAdmins(999L, RESTAURANT_ID))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void getAdminsReturnsRestaurantAdminsForTheOwner() {
+        stubCompanyAdmin();
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
+        User admin = User.builder().id(50L).role(UserRole.ROLE_RESTAURANT_ADMIN)
+                .companyId(COMPANY_ID).restaurantId(RESTAURANT_ID).build();
+        when(userRepository.findByRestaurantIdAndRole(RESTAURANT_ID, UserRole.ROLE_RESTAURANT_ADMIN)).thenReturn(List.of(admin));
+        when(userMapper.toDto(admin)).thenReturn(UserProfileDto.builder().id(50L).build());
+
+        var result = restaurantService.getAdmins(OWNER_ID, RESTAURANT_ID);
+
+        assertThat(result).extracting(UserProfileDto::getId).containsExactly(50L);
+    }
+
+    @Test
+    void revokeAdminThrowsWhenTargetIsNotAnAdminOfThisRestaurant() {
+        stubCompanyAdmin();
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
+        User target = User.builder().id(50L).role(UserRole.ROLE_USER).build();
+        when(userRepository.findById(50L)).thenReturn(Optional.of(target));
+
+        assertThatThrownBy(() -> restaurantService.revokeAdmin(OWNER_ID, RESTAURANT_ID, 50L))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_ERROR);
+    }
+
+    @Test
+    void revokeAdminResetsTargetToPlainUser() {
+        stubCompanyAdmin();
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant()));
+        User target = User.builder().id(50L).role(UserRole.ROLE_RESTAURANT_ADMIN)
+                .companyId(COMPANY_ID).restaurantId(RESTAURANT_ID).build();
+        when(userRepository.findById(50L)).thenReturn(Optional.of(target));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        restaurantService.revokeAdmin(OWNER_ID, RESTAURANT_ID, 50L);
+
+        assertThat(target.getRole()).isEqualTo(UserRole.ROLE_USER);
+        assertThat(target.getCompanyId()).isNull();
+        assertThat(target.getRestaurantId()).isNull();
     }
 }
