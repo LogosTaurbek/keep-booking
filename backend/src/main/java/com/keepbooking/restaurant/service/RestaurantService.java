@@ -224,9 +224,19 @@ public class RestaurantService {
     })
     @Transactional
     public RestaurantDto moderate(Long restaurantId, RestaurantStatus newStatus) {
+        return moderate(restaurantId, newStatus, null);
+    }
+
+    /**
+     * {@code reason} is only meaningful for a rejection (-> HIDDEN); approve/block pass
+     * {@code null}, which clears any stale reason left over from a previous rejection.
+     */
+    @Transactional
+    public RestaurantDto moderate(Long restaurantId, RestaurantStatus newStatus, String reason) {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESTAURANT_NOT_FOUND));
         restaurant.setStatus(newStatus);
+        restaurant.setRejectionReason(reason);
         return toDto(restaurantRepository.save(restaurant));
     }
 
@@ -259,6 +269,7 @@ public class RestaurantService {
                 .reviewsCount(r.getReviewsCount())
                 .avgCheck(r.getAvgCheck())
                 .status(r.getStatus())
+                .rejectionReason(r.getRejectionReason())
                 .cuisineSlugs(r.getCuisines().stream().map(Cuisine::getSlug).collect(Collectors.toSet()))
                 .build();
     }

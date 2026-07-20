@@ -60,7 +60,7 @@ public class AdminRestaurantController {
     @PatchMapping("/{id}/reject")
     public ResponseEntity<RestaurantDto> reject(@AuthenticationPrincipal User admin, @PathVariable Long id,
                                                  @Valid @RequestBody RejectRestaurantRequest request) {
-        RestaurantDto dto = restaurantService.moderate(id, RestaurantStatus.HIDDEN);
+        RestaurantDto dto = restaurantService.moderate(id, RestaurantStatus.HIDDEN, request.getReason());
         auditLogService.record(admin.getId(), "RESTAURANT_REJECTED", "Restaurant", id, request.getReason());
         return ResponseEntity.ok(dto);
     }

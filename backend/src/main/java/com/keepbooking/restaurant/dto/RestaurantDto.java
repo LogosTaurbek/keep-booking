@@ -26,5 +26,6 @@ public class RestaurantDto implements Serializable {
     private Integer reviewsCount;
     private Integer avgCheck;
     private RestaurantStatus status;
+    private String rejectionReason;
     private Set<String> cuisineSlugs;
 }

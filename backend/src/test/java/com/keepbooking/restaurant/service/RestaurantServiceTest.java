@@ -212,6 +212,33 @@ class RestaurantServiceTest {
     }
 
     @Test
+    void moderateWithReasonSetsRejectionReasonOnHidden() {
+        Restaurant restaurant = restaurant();
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
+        when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RestaurantDto dto = restaurantService.moderate(RESTAURANT_ID, RestaurantStatus.HIDDEN, "duplicate listing");
+
+        assertThat(dto.getStatus()).isEqualTo(RestaurantStatus.HIDDEN);
+        assertThat(dto.getRejectionReason()).isEqualTo("duplicate listing");
+        assertThat(restaurant.getRejectionReason()).isEqualTo("duplicate listing");
+    }
+
+    @Test
+    void moderateWithoutReasonClearsStaleRejectionReasonOnApprove() {
+        Restaurant restaurant = restaurant();
+        restaurant.setRejectionReason("incomplete details");
+        when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.of(restaurant));
+        when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RestaurantDto dto = restaurantService.moderate(RESTAURANT_ID, RestaurantStatus.ACTIVE);
+
+        assertThat(dto.getStatus()).isEqualTo(RestaurantStatus.ACTIVE);
+        assertThat(dto.getRejectionReason()).isNull();
+        assertThat(restaurant.getRejectionReason()).isNull();
+    }
+
+    @Test
     void updateThrowsWhenRestaurantNotFound() {
         when(restaurantRepository.findById(RESTAURANT_ID)).thenReturn(Optional.empty());
 

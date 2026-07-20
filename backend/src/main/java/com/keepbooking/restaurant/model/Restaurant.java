@@ -79,6 +79,9 @@ public class Restaurant extends BaseEntity {
     @Builder.Default
     private RestaurantStatus status = RestaurantStatus.DRAFT;
 
+    @Column(name = "rejection_reason")
+    private String rejectionReason;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "restaurant_cuisines",
